@@ -59,13 +59,30 @@ body.ui-hidden.focus-mode *{cursor:none !important}
 
 .top{top:16px;left:16px;right:16px;display:flex;align-items:center;
   justify-content:space-between;padding:10px 12px 10px 14px;gap:12px}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand{
+  display:flex;align-items:center;gap:10px;min-width:0;
+  background:none;border:none;padding:0;margin:0;
+  color:inherit;font:inherit;cursor:pointer;text-align:left;
+  border-radius:8px;
+  transition:opacity .2s var(--ease),transform .15s var(--ease);
+  -webkit-tap-highlight-color:transparent;
+}
+.brand:hover{opacity:.82}
+.brand:active{opacity:.65;transform:scale(.98)}
+.brand:focus-visible{outline:2px solid var(--a1);outline-offset:3px}
 .brand-logo{width:32px;height:32px;border-radius:10px;background:var(--grad);
   display:grid;place-items:center;flex-shrink:0;
   box-shadow:0 0 24px rgba(var(--a1-rgb),.5),inset 0 0 0 1px rgba(255,255,255,.15)}
 .brand-logo svg{width:16px;height:16px;color:#fff}
-.brand-txt h1{font-size:13.5px;font-weight:700;letter-spacing:-.01em;line-height:1.1}
-.brand-txt p{font-size:10px;color:var(--text-2);letter-spacing:.04em;font-weight:500}
+.brand-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.brand-title{
+  font-size:13.5px;font-weight:700;letter-spacing:-.01em;
+  line-height:1.1;color:var(--text-1);display:block;
+}
+.brand-subtitle{
+  font-size:10px;color:var(--text-2);letter-spacing:.04em;
+  font-weight:500;display:block;
+}
 
 .tools{display:flex;align-items:center;gap:6px}
 .stats{display:flex;gap:14px;align-items:center;font-size:10px;
@@ -910,7 +927,1170 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
              inset 0 1px 0 rgba(255,255,255,.25);
 }
 .perm-btn.confirm:active{transform:translateY(0)}
+/* ═══════════════════════════════════════════════════════════════
+   ═══ CROP MODAL ═══
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes cropSpin{to{transform:rotate(360deg)}}
 
+.crop-overlay{
+  position:fixed;inset:0;z-index:120;
+  background:rgba(0,0,0,.86);
+  backdrop-filter:blur(24px) saturate(140%);
+  -webkit-backdrop-filter:blur(24px) saturate(140%);
+  display:grid;place-items:center;padding:20px;
+  opacity:0;pointer-events:none;
+  transition:opacity .28s var(--ease);
+  overscroll-behavior:contain;
+}
+.crop-overlay.active{opacity:1;pointer-events:auto}
+
+.crop-modal{
+  width:100%;max-width:560px;
+  max-height:calc(100vh - 32px);
+  background:var(--panel-bg);
+  backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid var(--panel-bd);
+  border-radius:var(--r-lg);
+  box-shadow:0 32px 80px rgba(0,0,0,.85),
+             0 0 60px rgba(var(--a1-rgb),.15),
+             inset 0 1px 0 rgba(255,255,255,.06);
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateY(12px) scale(.97);
+  transition:transform .32s var(--ease);
+}
+.crop-overlay.active .crop-modal{transform:none}
+
+/* ─── Header ─── */
+.crop-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 12px;
+  border-bottom:1px solid var(--panel-bd);
+  gap:12px;flex-shrink:0;
+}
+.crop-title{display:flex;align-items:center;gap:10px;min-width:0}
+.crop-title svg{width:16px;height:16px;color:var(--a1);flex-shrink:0}
+.crop-title h3{
+  font-size:13px;font-weight:700;letter-spacing:.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.crop-close{
+  width:30px;height:30px;border-radius:8px;
+  display:grid;place-items:center;
+  color:var(--text-2);border:1px solid transparent;
+  transition:all .2s var(--ease);flex-shrink:0;
+}
+.crop-close:hover{background:var(--surface-2);color:var(--text-1);border-color:var(--panel-bd)}
+.crop-close svg{width:14px;height:14px}
+
+/* ─── Stage (viewport crop) ─── */
+.crop-stage-wrap{
+  padding:14px 16px 0;
+  display:flex;justify-content:center;
+  flex-shrink:0;
+}
+.crop-stage{
+  position:relative;
+  background:#000;
+  border-radius:var(--r-md);
+  overflow:hidden;
+  cursor:grab;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  box-shadow:inset 0 0 0 1px var(--panel-bd),
+             0 0 0 1px rgba(var(--a1-rgb),.18),
+             0 8px 32px rgba(0,0,0,.55);
+  will-change:width,height;
+}
+.crop-stage.dragging{cursor:grabbing}
+#cropCanvas{display:block;width:100%;height:100%;pointer-events:none}
+
+/* Rule of thirds */
+.crop-grid{
+  position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,transparent calc(33.333% - .5px),rgba(255,255,255,.11) calc(33.333% - .5px),rgba(255,255,255,.11) calc(33.333% + .5px),transparent calc(33.333% + .5px)),
+    linear-gradient(to right,transparent calc(66.666% - .5px),rgba(255,255,255,.11) calc(66.666% - .5px),rgba(255,255,255,.11) calc(66.666% + .5px),transparent calc(66.666% + .5px)),
+    linear-gradient(to bottom,transparent calc(33.333% - .5px),rgba(255,255,255,.11) calc(33.333% - .5px),rgba(255,255,255,.11) calc(33.333% + .5px),transparent calc(33.333% + .5px)),
+    linear-gradient(to bottom,transparent calc(66.666% - .5px),rgba(255,255,255,.11) calc(66.666% - .5px),rgba(255,255,255,.11) calc(66.666% + .5px),transparent calc(66.666% + .5px));
+  opacity:.85;
+}
+
+/* Corner brackets */
+.crop-corners{position:absolute;inset:0;pointer-events:none}
+.crop-corners::before,
+.crop-corners::after,
+.crop-corners > span::before,
+.crop-corners > span::after{
+  content:'';position:absolute;
+  width:16px;height:16px;
+  border:2px solid #fff;
+  filter:drop-shadow(0 0 5px rgba(0,0,0,.7));
+}
+.crop-corners::before{top:10px;left:10px;border-right:none;border-bottom:none;border-top-left-radius:4px}
+.crop-corners::after{top:10px;right:10px;border-left:none;border-bottom:none;border-top-right-radius:4px}
+.crop-corners > span::before{bottom:10px;left:10px;border-right:none;border-top:none;border-bottom-left-radius:4px}
+.crop-corners > span::after{bottom:10px;right:10px;border-left:none;border-top:none;border-bottom-right-radius:4px}
+
+/* Loading state */
+.crop-loading{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:rgba(0,0,0,.72);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  font-size:11.5px;color:var(--text-2);letter-spacing:.04em;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s var(--ease);
+}
+.crop-loading.show{opacity:1;pointer-events:auto}
+.crop-loading .spinner-mini{
+  width:16px;height:16px;border-radius:50%;
+  border:2px solid rgba(var(--a1-rgb),.25);
+  border-top-color:var(--a1);
+  animation:cropSpin .8s linear infinite;
+  flex-shrink:0;
+}
+
+/* ─── Controls ─── */
+.crop-controls{
+  padding:14px 16px 4px;
+  display:flex;flex-direction:column;gap:12px;
+  flex-shrink:0;
+}
+.crop-ratio-row{display:flex;flex-wrap:wrap;gap:6px}
+.crop-ratio-btn{
+  flex:1 1 auto;min-width:58px;
+  padding:8px 10px;border-radius:8px;
+  background:var(--surface-1);
+  border:1px solid transparent;
+  font-size:10.5px;font-weight:700;letter-spacing:.03em;
+  color:var(--text-2);
+  transition:all .2s var(--ease);
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.crop-ratio-btn:hover{background:var(--surface-2);color:var(--text-1);border-color:var(--panel-bd)}
+.crop-ratio-btn.active{
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.22),rgba(var(--a2-rgb),.18));
+  color:#fff;
+  border-color:rgba(var(--a1-rgb),.55);
+  box-shadow:0 0 14px rgba(var(--a1-rgb),.25),
+             inset 0 1px 0 rgba(255,255,255,.15);
+}
+
+.crop-zoom-row{
+  display:grid;grid-template-columns:auto 1fr auto;
+  gap:12px;align-items:center;
+  padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--surface-1);
+  border:1px solid var(--panel-bd);
+}
+.crop-zoom-row > svg{width:14px;height:14px;color:var(--text-3)}
+.crop-zoom-row input{width:100%;height:4px}
+.crop-zoom-val{
+  font-size:10.5px;font-weight:700;color:var(--text-1);
+  font-variant-numeric:tabular-nums;
+  min-width:42px;text-align:right;letter-spacing:.02em;
+}
+
+.crop-hint{
+  padding:8px 16px 0;
+  font-size:10px;color:var(--text-3);
+  text-align:center;letter-spacing:.02em;
+  line-height:1.5;flex-shrink:0;
+}
+
+/* ─── Actions ─── */
+.crop-actions{
+  padding:14px 16px 16px;
+  display:grid;grid-template-columns:1fr 1.4fr;gap:8px;
+  flex-shrink:0;
+}
+.crop-btn{
+  padding:11px 14px;border-radius:var(--r-sm);
+  font-size:11.5px;font-weight:700;letter-spacing:.03em;
+  transition:all .2s var(--ease);
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.crop-btn svg{width:13px;height:13px}
+.crop-btn.cancel{
+  background:var(--surface-1);color:var(--text-2);
+  border:1px solid transparent;
+}
+.crop-btn.cancel:hover{background:var(--surface-2);color:var(--text-1);border-color:var(--panel-bd)}
+.crop-btn.confirm{
+  background:var(--grad);color:#fff;
+  box-shadow:0 6px 18px rgba(var(--a1-rgb),.4),
+             inset 0 1px 0 rgba(255,255,255,.25);
+}
+.crop-btn.confirm:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 24px rgba(var(--a1-rgb),.55),
+             inset 0 1px 0 rgba(255,255,255,.25);
+}
+.crop-btn.confirm:active{transform:none}
+/* ═══════════════════════════════════════════════════════════════
+   ═══ BG RESTORE BUTTON ═══
+   ═══════════════════════════════════════════════════════════════ */
+.bg-restore-btn{
+  display:none;
+  width:100%;
+  padding:10px 12px 10px 10px;
+  border-radius:var(--r-md);
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.14),rgba(var(--a2-rgb),.09));
+  border:1px solid rgba(var(--a1-rgb),.4);
+  box-shadow:0 0 18px rgba(var(--a1-rgb),.15),
+             inset 0 1px 0 rgba(255,255,255,.08);
+  grid-template-columns:34px minmax(0,1fr) 26px;
+  gap:10px;align-items:center;
+  transition:all .25s var(--ease);
+  text-align:left;position:relative;overflow:hidden;
+  margin-top:8px;cursor:pointer;
+}
+.bg-restore-btn[hidden]{display:none}
+.bg-restore-btn:not([hidden]){display:grid}
+.bg-restore-btn:hover{
+  border-color:rgba(var(--a1-rgb),.65);
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.2),rgba(var(--a2-rgb),.13));
+  box-shadow:0 0 24px rgba(var(--a1-rgb),.3),
+             inset 0 1px 0 rgba(255,255,255,.1);
+  transform:translateY(-1px);
+}
+.bg-restore-btn:active{transform:translateY(0)}
+
+/* Thumbnail preview foto tersimpan */
+.bg-restore-icon{
+  width:34px;height:34px;border-radius:9px;
+  background:var(--surface-2);
+  background-size:cover;background-position:center;
+  display:grid;place-items:center;
+  color:var(--a1);flex-shrink:0;
+  overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--panel-bd);
+}
+.bg-restore-icon.has-thumb{color:transparent}
+.bg-restore-icon svg{width:15px;height:15px}
+
+.bg-restore-body{
+  display:flex;flex-direction:column;gap:2px;min-width:0;overflow:hidden;
+}
+.bg-restore-label{
+  font-size:11.5px;font-weight:700;color:var(--text-1);
+  letter-spacing:-.005em;line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.bg-restore-meta{
+  font-size:9.5px;color:var(--text-2);letter-spacing:.02em;
+  line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+.bg-restore-clear{
+  width:26px;height:26px;border-radius:7px;
+  display:grid;place-items:center;
+  color:var(--text-3);flex-shrink:0;
+  transition:all .2s var(--ease);
+}
+.bg-restore-clear:hover{background:rgba(255,51,85,.12);color:var(--live)}
+.bg-restore-clear svg{width:12px;height:12px}
+
+/* Active state — saat bgId === 'custom' */
+.bg-restore-btn.active{
+  border-color:rgba(var(--a1-rgb),.85);
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.26),rgba(var(--a2-rgb),.18));
+  box-shadow:0 0 28px rgba(var(--a1-rgb),.4),
+             inset 0 1px 0 rgba(255,255,255,.15);
+}
+.bg-restore-btn.active .bg-restore-label::before{
+  content:'';display:inline-block;
+  width:6px;height:6px;border-radius:50%;
+  background:var(--a2);margin-right:6px;
+  box-shadow:0 0 8px var(--a2);
+  animation:pillPulse 1.6s ease-in-out infinite;
+  vertical-align:1px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ═══ ABOUT / LANDING PAGE ═══
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes aboutFloat{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-6px)}
+}
+
+.about-overlay{
+  position:fixed;inset:0;z-index:110;
+  background:radial-gradient(circle at 50% 30%,rgba(var(--a1-rgb),.08),transparent 60%),
+             rgba(0,0,0,.9);
+  backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  display:grid;place-items:center;
+  padding:24px;
+  opacity:0;pointer-events:none;
+  transition:opacity .4s var(--ease);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:var(--panel-hi) transparent;
+}
+.about-overlay.active{opacity:1;pointer-events:auto}
+.about-overlay::-webkit-scrollbar{width:6px}
+.about-overlay::-webkit-scrollbar-thumb{
+  background:var(--panel-hi);border-radius:6px;
+}
+
+.about-modal{
+  max-width:520px;width:100%;
+  max-height:calc(100vh - 48px);
+  overflow-y:auto;
+  padding:32px 28px 22px;
+  background:linear-gradient(180deg,
+    rgba(20,20,26,.94) 0%,
+    rgba(12,12,16,.96) 100%);
+  backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid var(--panel-bd);
+  border-radius:24px;
+  box-shadow:0 40px 100px rgba(0,0,0,.85),
+             0 0 80px rgba(var(--a1-rgb),.12),
+             inset 0 1px 0 rgba(255,255,255,.08);
+  position:relative;
+  text-align:center;
+  transform:translateY(16px) scale(.96);
+  transition:transform .45s var(--ease);
+  scrollbar-width:thin;
+  scrollbar-color:var(--panel-hi) transparent;
+}
+.about-modal::-webkit-scrollbar{width:6px}
+.about-modal::-webkit-scrollbar-thumb{
+  background:var(--panel-hi);border-radius:6px;
+}
+.about-overlay.active .about-modal{transform:none}
+
+/* Close button */
+.about-close{
+  position:absolute;top:14px;right:14px;
+  width:32px;height:32px;border-radius:9px;
+  display:grid;place-items:center;
+  color:var(--text-3);
+  transition:all .2s var(--ease);
+  z-index:2;
+}
+.about-close:hover{
+  background:var(--surface-2);color:var(--text-1);
+}
+.about-close svg{width:14px;height:14px}
+
+/* Hero */
+.about-hero{margin-bottom:18px}
+.about-logo{
+  width:72px;height:72px;border-radius:22px;
+  background:var(--grad);
+  display:grid;place-items:center;
+  margin:0 auto 18px;
+  color:#fff;
+  box-shadow:0 20px 50px rgba(var(--a1-rgb),.5),
+             0 0 0 1px rgba(255,255,255,.12),
+             inset 0 1px 0 rgba(255,255,255,.28);
+  animation:aboutFloat 4s ease-in-out infinite;
+}
+.about-logo svg{width:34px;height:34px}
+.about-title{
+  font-size:30px;font-weight:800;
+  letter-spacing:-.03em;
+  background:linear-gradient(135deg,#fff 0%,rgba(255,255,255,.75) 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  color:transparent;
+  margin-bottom:6px;
+  line-height:1.1;
+}
+.about-tagline{
+  font-size:10.5px;font-weight:700;
+  letter-spacing:.22em;
+  color:var(--text-2);
+  text-transform:uppercase;
+  margin-bottom:0;
+}
+
+/* Description */
+.about-desc{
+  font-size:12.5px;line-height:1.65;
+  color:var(--text-2);
+  padding:0 6px;
+  margin-bottom:22px;
+  letter-spacing:.005em;
+}
+
+/* Features grid */
+.about-features{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:24px;
+  text-align:left;
+}
+.about-feature{
+  display:grid;
+  grid-template-columns:32px minmax(0,1fr);
+  gap:10px;
+  align-items:flex-start;
+  padding:10px 11px;
+  border-radius:12px;
+  background:var(--surface-1);
+  border:1px solid transparent;
+  transition:all .22s var(--ease);
+}
+.about-feature:hover{
+  background:var(--surface-2);
+  border-color:var(--panel-bd);
+  transform:translateY(-1px);
+}
+.about-feat-icon{
+  width:32px;height:32px;border-radius:9px;
+  background:rgba(var(--a1-rgb),.12);
+  color:var(--a1);
+  display:grid;place-items:center;
+  flex-shrink:0;
+  box-shadow:inset 0 0 0 1px rgba(var(--a1-rgb),.18);
+}
+.about-feat-icon svg{width:15px;height:15px}
+.about-feat-text{min-width:0;overflow:hidden}
+.about-feat-text h4{
+  font-size:11px;font-weight:700;
+  color:var(--text-1);
+  letter-spacing:-.005em;
+  line-height:1.25;
+  margin-bottom:2px;
+}
+.about-feat-text p{
+  font-size:9.5px;color:var(--text-2);
+  line-height:1.4;letter-spacing:.005em;
+}
+
+/* CTA */
+.about-cta{
+  width:100%;
+  padding:14px 22px;
+  border-radius:100px;
+  background:var(--grad);
+  color:#fff;
+  font-size:13px;font-weight:700;
+  letter-spacing:.02em;
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;
+  box-shadow:0 10px 28px rgba(var(--a1-rgb),.45),
+             inset 0 1px 0 rgba(255,255,255,.28);
+  transition:transform .25s var(--ease),box-shadow .25s var(--ease);
+  margin-bottom:16px;
+}
+.about-cta:hover{
+  transform:translateY(-2px);
+  box-shadow:0 16px 40px rgba(var(--a1-rgb),.6),
+             inset 0 1px 0 rgba(255,255,255,.28);
+}
+.about-cta:active{transform:translateY(0) scale(.98)}
+.about-cta svg{width:15px;height:15px}
+
+/* Credit */
+.about-credit{
+  font-size:10px;font-weight:500;
+  letter-spacing:.1em;
+  color:var(--text-3);
+  text-transform:uppercase;
+}
+.about-credit a{
+  color:inherit;text-decoration:none;font-weight:700;
+  transition:color .25s var(--ease);
+}
+.about-credit a:hover{color:var(--a1)}
+/* ═══════════════════════════════════════════════════════════════
+   ═══ BEAT COLOR CARDS (Horizontal Slider) ═══
+   ═══════════════════════════════════════════════════════════════ */
+.beat-color-card{
+  flex:0 0 auto;
+  width:76px;
+  padding:9px 6px 10px;
+  border-radius:12px;
+  background:var(--surface-1);
+  border:2px solid transparent;
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  scroll-snap-align:start;
+  transition:background .22s var(--ease),border-color .22s var(--ease),
+             transform .22s var(--ease),box-shadow .22s var(--ease);
+  position:relative;cursor:pointer;
+  color:var(--text-2);text-align:center;
+  will-change:transform;
+}
+.beat-color-card:hover{
+  background:var(--surface-2);border-color:var(--panel-bd);
+  transform:translateY(-2px);color:var(--text-1);
+}
+.beat-color-card:active{transform:translateY(0) scale(.96)}
+.beat-color-card:focus-visible{outline:2px solid var(--a1);outline-offset:2px}
+.beat-color-card.active{
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.22),rgba(var(--a2-rgb),.14));
+  border-color:rgba(var(--a1-rgb),.75);
+  color:#fff;
+  transform:translateY(-3px) scale(1.04);
+  box-shadow:0 12px 30px rgba(var(--a1-rgb),.4),
+             0 0 0 1px rgba(var(--a1-rgb),.28),
+             inset 0 0 24px rgba(var(--a2-rgb),.06);
+}
+.beat-color-card.active::after{
+  content:'';position:absolute;
+  left:12px;right:12px;bottom:-7px;height:3px;
+  border-radius:3px;background:var(--grad);
+  box-shadow:0 0 12px rgba(var(--a1-rgb),.85);
+  animation:underlinePulse 2s ease-in-out infinite;
+}
+.beat-color-swatch{
+  width:38px;height:38px;border-radius:11px;
+  display:grid;place-items:center;
+  position:relative;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28),
+             0 2px 10px rgba(0,0,0,.55);
+  transition:transform .25s var(--ease);
+  flex-shrink:0;
+}
+.beat-color-card:hover .beat-color-swatch{transform:scale(1.06)}
+.beat-color-card.active .beat-color-swatch{
+  box-shadow:0 0 0 1px rgba(255,255,255,.2),
+             0 4px 18px rgba(var(--a1-rgb),.5),
+             inset 0 1px 0 rgba(255,255,255,.35);
+}
+.beat-color-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:rgba(255,255,255,.9);
+  box-shadow:0 0 10px rgba(255,255,255,.9);
+  opacity:0;transform:scale(0);
+  transition:all .25s var(--ease-bounce);
+}
+.beat-color-card.active .beat-color-dot{
+  opacity:1;transform:scale(1);
+  animation:beatDotPulse 1.6s ease-in-out infinite;
+}
+@keyframes beatDotPulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.55;transform:scale(1.4)}
+}
+.beat-color-name{
+  font-size:9.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  width:100%;color:inherit;
+}
+.beat-color-card.active .beat-color-name{
+  color:#fff;text-shadow:0 0 8px rgba(var(--a1-rgb),.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ═══ CUSTOM BG COLOR ═══
+   ═══════════════════════════════════════════════════════════════ */
+.bg-custom-color-wrap{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;align-items:center;
+  padding:11px 12px 11px 14px;
+  margin-top:8px;
+  border-radius:var(--r-md);
+  background:var(--surface-1);
+  border:1px solid var(--panel-bd);
+  transition:background .25s var(--ease),
+             border-color .25s var(--ease),
+             box-shadow .25s var(--ease);
+  position:relative;overflow:hidden;
+}
+.bg-custom-color-wrap:hover{
+  background:var(--surface-2);
+  border-color:rgba(var(--a1-rgb),.35);
+}
+.bg-custom-color-wrap.active{
+  border-color:rgba(var(--a1-rgb),.7);
+  background:linear-gradient(135deg,rgba(var(--a1-rgb),.14),rgba(var(--a2-rgb),.09));
+  box-shadow:0 0 22px rgba(var(--a1-rgb),.24),
+             inset 0 1px 0 rgba(255,255,255,.08);
+}
+.bg-custom-color-wrap.active::before{
+  content:'';position:absolute;
+  left:0;top:0;bottom:0;width:3px;
+  background:var(--grad);
+  box-shadow:0 0 10px rgba(var(--a1-rgb),.85);
+}
+.bg-custom-color-info{
+  display:flex;flex-direction:column;gap:3px;
+  min-width:0;overflow:hidden;
+}
+.bg-custom-color-title{
+  font-size:11.5px;font-weight:700;color:var(--text-1);
+  letter-spacing:-.005em;line-height:1.2;
+}
+.bg-custom-color-hex{
+  font-size:10px;color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+  font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;
+  transition:color .25s var(--ease);
+}
+.bg-custom-color-wrap.active .bg-custom-color-hex{
+  color:var(--a1);
+}
+.bg-custom-color-wrap input[type=color]{
+  width:46px;height:32px;
+  border-radius:8px;
+  border:2px solid var(--panel-bd);
+  transition:all .2s var(--ease);
+}
+.bg-custom-color-wrap input[type=color]:hover{
+  border-color:rgba(var(--a1-rgb),.55);
+  transform:scale(1.05);
+}
+/* ═══════════════════════════════════════════════════════════════
+   ═══ FULL PLAYER VIEW — CONTAINED IN CARD ═══
+   Menempati seluruh area .side card, menutupi tabs + panels.
+   Toggle dengan Mini Player via body.np-open.
+   ═══════════════════════════════════════════════════════════════ */
+.np-overlay{
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  background:linear-gradient(180deg,#0a0a0f 0%,#050508 100%);
+  display:flex;flex-direction:column;
+  padding:14px 14px 16px;
+  transform:translateY(101%);
+  transition:transform .45s cubic-bezier(.32,.72,0,1);
+  will-change:transform;
+  overflow:hidden;
+  isolation:isolate;
+  z-index:2;
+}
+.np-overlay.active{transform:translateY(0)}
+
+/* Mini Player + CTA auto-hide saat Full Player terbuka */
+body.np-open .player{
+  opacity:0 !important;
+  pointer-events:none !important;
+  transform:translateY(20px) scale(.98) !important;
+}
+body.np-open .cta{
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
+.np-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 22%, rgba(var(--a1-rgb),.2), transparent 72%),
+    radial-gradient(ellipse 55% 35% at 82% 88%, rgba(var(--a2-rgb),.1), transparent 70%);
+  opacity:.9;
+  pointer-events:none;
+  z-index:-1;
+  animation:npBgPulse 12s ease-in-out infinite;
+}
+@keyframes npBgPulse{
+  0%,100%{opacity:.85}
+  50%{opacity:1}
+}
+
+/* ─── Header (compact) ─── */
+.np-head{
+  display:grid;
+  grid-template-columns:34px 1fr 34px;   /* kolom ke-3 tetap reserved untuk centering */
+  gap:6px;align-items:center;
+  flex-shrink:0;
+  padding-bottom:10px;
+}
+.np-back{
+  width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;
+  color:var(--text-1);
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.06);
+  transition:all .22s var(--ease);
+  cursor:pointer;
+}
+.np-back:hover{
+  background:rgba(255,255,255,.09);
+  border-color:rgba(var(--a1-rgb),.35);
+  transform:scale(1.05);
+}
+.np-back:active{transform:scale(.94)}
+.np-back svg{width:15px;height:15px}
+
+.np-head-info{
+  min-width:0;text-align:center;overflow:hidden;
+}
+.np-title{
+  font-size:12px;font-weight:700;
+  color:var(--text-1);
+  letter-spacing:-.005em;
+  line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  margin-bottom:2px;
+}
+.np-subtitle{
+  font-size:9.5px;font-weight:500;
+  color:var(--text-2);
+  letter-spacing:.03em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* ─── Album Art (fit to card width, max 200px) ─── */
+.np-art-wrap{
+  flex:1;min-height:0;
+  display:grid;place-items:center;
+  padding:8px 0;
+}
+.np-art{
+  position:relative;
+  aspect-ratio:1/1;
+  width:min(100%, 200px);
+  max-height:100%;
+  border-radius:14px;
+  overflow:hidden;
+  background:#101015;
+  box-shadow:
+    0 20px 50px rgba(0,0,0,.7),
+    0 0 40px rgba(var(--a1-rgb),.1),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  transition:transform .6s cubic-bezier(.32,.72,0,1),
+             box-shadow .4s var(--ease);
+}
+.np-overlay.active .np-art{
+  animation:npArtIn .6s cubic-bezier(.32,.72,0,1) .08s backwards;
+}
+@keyframes npArtIn{
+  from{transform:scale(.88);opacity:0}
+  to{transform:scale(1);opacity:1}
+}
+.np-art-placeholder{
+  position:absolute;inset:0;
+  display:grid;place-items:center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(var(--a1-rgb),.24), transparent 55%),
+    radial-gradient(circle at 75% 80%, rgba(var(--a2-rgb),.18), transparent 55%),
+    linear-gradient(135deg, #0f0f14 0%, #1a1a22 100%);
+  color:rgba(255,255,255,.22);
+}
+.np-art-placeholder svg{
+  width:38%;height:38%;max-width:90px;max-height:90px;
+  transition:transform .5s var(--ease);
+}
+.np-overlay.active .np-art-placeholder svg{
+  animation:npArtFloat 6s ease-in-out infinite;
+}
+@keyframes npArtFloat{
+  0%,100%{transform:translateY(0) rotate(0)}
+  50%{transform:translateY(-4px) rotate(-2deg)}
+}
+
+.np-art-eq{
+  position:absolute;
+  left:0;right:0;bottom:10px;
+  height:16px;
+  display:flex;align-items:flex-end;justify-content:center;
+  gap:2.5px;
+  opacity:0;
+  transition:opacity .4s var(--ease);
+  pointer-events:none;
+}
+.np-overlay.playing .np-art-eq{opacity:1}
+.np-art-eq span{
+  width:2.5px;height:100%;
+  background:linear-gradient(180deg, var(--a1) 0%, var(--a2) 100%);
+  border-radius:2px;
+  transform-origin:bottom center;
+  box-shadow:0 0 6px rgba(var(--a1-rgb),.6);
+  animation:npEq 1s ease-in-out infinite;
+}
+.np-art-eq span:nth-child(1){animation-delay:0s}
+.np-art-eq span:nth-child(2){animation-delay:.14s}
+.np-art-eq span:nth-child(3){animation-delay:.28s}
+.np-art-eq span:nth-child(4){animation-delay:.42s}
+.np-art-eq span:nth-child(5){animation-delay:.56s}
+@keyframes npEq{
+  0%,100%{transform:scaleY(.28)}
+  50%{transform:scaleY(1)}
+}
+
+/* ─── Progress (compact) ─── */
+.np-progress-wrap{
+  flex-shrink:0;
+  padding:0 2px 12px;
+}
+.np-progress{
+  cursor:pointer;
+  padding:6px 0;
+  outline:none;
+}
+.np-progress:focus-visible .np-progress-track{
+  box-shadow:0 0 0 2px rgba(var(--a1-rgb),.5);
+}
+.np-progress-track{
+  position:relative;
+  height:3px;
+  background:rgba(255,255,255,.12);
+  border-radius:4px;
+  transition:height .2s var(--ease),box-shadow .2s;
+}
+.np-progress:hover .np-progress-track{height:5px}
+.np-progress-fill{
+  position:absolute;left:0;top:0;bottom:0;
+  width:0%;
+  border-radius:inherit;
+  background:linear-gradient(90deg, var(--a1) 0%, var(--a2) 100%);
+  box-shadow:0 0 10px rgba(var(--a1-rgb),.5);
+  transition:width .12s linear;
+}
+.np-progress-thumb{
+  position:absolute;
+  top:50%;
+  left:0%;
+  width:10px;height:10px;border-radius:50%;
+  background:#fff;
+  transform:translate(-50%,-50%) scale(0);
+  box-shadow:0 2px 8px rgba(0,0,0,.7),0 0 10px rgba(var(--a1-rgb),.6);
+  transition:transform .18s var(--ease),
+             left .12s linear;
+  pointer-events:none;
+}
+.np-progress:hover .np-progress-thumb,
+.np-progress:focus-visible .np-progress-thumb,
+.np-progress.dragging .np-progress-thumb{
+  transform:translate(-50%,-50%) scale(1);
+}
+
+.np-times{
+  display:flex;justify-content:space-between;
+  margin-top:5px;padding:0 2px;
+  font-size:9.5px;font-weight:600;
+  color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.04em;
+}
+
+/* ─── Controls (compact 5-column) ─── */
+.np-controls{
+  flex-shrink:0;
+  display:grid;
+  grid-template-columns:1fr 1fr auto 1fr 1fr;
+  align-items:center;
+  justify-items:center;
+  gap:0;
+  padding:0 2px;
+}
+.np-ctrl{
+  height:40px;width:40px;
+  display:grid;place-items:center;
+  color:var(--text-2);
+  border-radius:50%;
+  transition:color .22s var(--ease),transform .15s var(--ease);
+  cursor:pointer;
+  position:relative;
+}
+.np-ctrl:hover{color:var(--text-1)}
+.np-ctrl:active{transform:scale(.9)}
+.np-ctrl:focus-visible{
+  outline:2px solid var(--a1);
+  outline-offset:-2px;
+}
+.np-ctrl svg{width:18px;height:18px}
+.np-ctrl.active{color:var(--a1)}
+.np-ctrl.active::after{
+  content:'';
+  position:absolute;
+  bottom:2px;left:50%;
+  transform:translateX(-50%);
+  width:3px;height:3px;
+  border-radius:50%;
+  background:var(--a1);
+  box-shadow:0 0 6px var(--a1);
+  animation:pillPulse 1.6s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ═══ MODE BUTTON — Single Cycle (Off → Repeat All → Repeat One → Shuffle) ═══
+   Semua icon overlap dalam grid-cell yang sama; transisi = crossfade
+   + scale + rotate untuk efek "morph".
+   ═══════════════════════════════════════════════════════════════ */
+.np-mode{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr;
+  grid-template-rows:1fr;
+  place-items:center;
+  color:var(--text-3);
+  transition:color .3s var(--ease), filter .3s var(--ease);
+  -webkit-tap-highlight-color:transparent;
+}
+.np-mode > *{
+  grid-area:1 / 1;
+}
+
+/* Semua icon base size */
+.np-mode-icon{
+  width:18px;
+  height:18px;
+  transition:
+    opacity .35s var(--ease),
+    transform .5s cubic-bezier(.34,1.56,.64,1),
+    filter .3s var(--ease);
+  transform-origin:center;
+  pointer-events:none;
+}
+
+/* ── Default state: repeat icon visible, shuffle hidden ── */
+.np-mode-icon-repeat{
+  opacity:1;
+  transform:scale(1) rotate(0deg);
+}
+.np-mode-icon-shuffle{
+  opacity:0;
+  transform:scale(.35) rotate(-90deg);
+}
+
+/* ── Shuffle state: crossfade ── */
+.np-mode[data-mode="shuffle"] .np-mode-icon-repeat{
+  opacity:0;
+  transform:scale(.35) rotate(90deg);
+}
+.np-mode[data-mode="shuffle"] .np-mode-icon-shuffle{
+  opacity:1;
+  transform:scale(1) rotate(0deg);
+}
+
+/* ── Active colors (green glow) ── */
+.np-mode[data-mode="repeat-all"],
+.np-mode[data-mode="repeat-one"],
+.np-mode[data-mode="shuffle"]{
+  color:var(--a1);
+  filter:drop-shadow(0 0 6px rgba(var(--a1-rgb),.55));
+}
+.np-mode[data-mode="off"]:hover{
+  color:var(--text-2);
+}
+.np-mode[data-mode="repeat-all"]:hover,
+.np-mode[data-mode="repeat-one"]:hover,
+.np-mode[data-mode="shuffle"]:hover{
+  transform:scale(1.06);
+  filter:drop-shadow(0 0 8px rgba(var(--a1-rgb),.75));
+}
+
+/* ── "1" badge — duduk natural di celah antara 2 panah ── */
+.np-mode-one{
+  font-family:ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size:9px;
+  font-weight:900;
+  line-height:1;
+  color:inherit;
+  letter-spacing:-.02em;
+  /* Nudge sedikit untuk optical centering di gap arrow */
+  margin-top:-.5px;
+  opacity:0;
+  transform:scale(.35) rotate(-45deg);
+  transition:
+    opacity .25s var(--ease),
+    transform .5s cubic-bezier(.34,1.56,.64,1);
+  pointer-events:none;
+  will-change:transform, opacity;
+}
+.np-mode[data-mode="repeat-one"] .np-mode-one{
+  opacity:1;
+  transform:scale(1) rotate(0deg);
+}
+
+/* ── Pulse feedback saat klik ── */
+@keyframes npModePulse{
+  0%{transform:scale(1)}
+  45%{transform:scale(1.15)}
+  100%{transform:scale(1)}
+}
+.np-mode.pulse{
+  animation:npModePulse .4s var(--ease-bounce);
+}
+
+/* Play button — CTA utama dalam card */
+.np-play{
+  height:52px;width:52px;
+  border-radius:50%;
+  background:#fff;
+  color:#0a0a0f;
+  display:grid;place-items:center;
+  box-shadow:
+    0 8px 22px rgba(0,0,0,.5),
+    0 0 0 1px rgba(255,255,255,.14),
+    inset 0 -2px 6px rgba(0,0,0,.08);
+  transition:transform .18s var(--ease),box-shadow .2s var(--ease);
+  cursor:pointer;
+  position:relative;
+}
+.np-play:hover{
+  transform:scale(1.06);
+  box-shadow:
+    0 12px 30px rgba(0,0,0,.55),
+    0 0 0 1px rgba(255,255,255,.2),
+    0 0 20px rgba(var(--a1-rgb),.35),
+    inset 0 -2px 6px rgba(0,0,0,.08);
+}
+.np-play:active{transform:scale(.94)}
+.np-play:focus-visible{
+  outline:2px solid var(--a1);
+  outline-offset:4px;
+}
+.np-play svg{width:20px;height:20px;margin-left:2px}
+.np-play .np-pause-icon{display:none;margin-left:0}
+.np-overlay.playing .np-play .np-play-icon{display:none}
+.np-overlay.playing .np-play .np-pause-icon{display:block}
+
+/* Live source — disable progress & prev/next */
+.np-overlay.live-source .np-progress-wrap,
+.np-overlay.live-source #npPrev,
+.np-overlay.live-source #npNext{
+  opacity:.35;pointer-events:none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ═══ MINI PLAYER — TAP TO EXPAND ═══
+   ═══════════════════════════════════════════════════════════════ */
+.track-info{
+  position:relative;
+  cursor:pointer;
+  padding:4px 26px 4px 8px;
+  margin:-4px -8px -4px -8px;
+  border-radius:8px;
+  transition:background .2s var(--ease),
+             transform .15s var(--ease);
+  -webkit-tap-highlight-color:transparent;
+  outline:none;
+}
+.track-info:hover{
+  background:rgba(255,255,255,.035);
+}
+.track-info:active{
+  background:rgba(255,255,255,.06);
+  transform:scale(.985);
+}
+.track-info:focus-visible{
+  box-shadow:0 0 0 2px rgba(var(--a1-rgb),.6);
+}
+
+/* Chevron-up indicator */
+.track-expand{
+  position:absolute;
+  right:6px;
+  top:50%;
+  width:18px;height:18px;
+  display:grid;place-items:center;
+  color:var(--text-3);
+  opacity:0;
+  transform:translateY(-50%) translateX(-4px);
+  transition:opacity .25s var(--ease),
+             transform .25s var(--ease),
+             color .25s var(--ease);
+  pointer-events:none;
+}
+.track-expand svg{width:13px;height:13px}
+
+.track-info:hover .track-expand,
+.track-info:focus-visible .track-expand{
+  opacity:1;
+  transform:translateY(-50%) translateX(0);
+  color:var(--a1);
+}
+
+/* Continuous pulse hint (hanya saat playing, pertama kali) */
+body.np-hint .track-info .track-expand{
+  opacity:1;
+  transform:translateY(-50%) translateX(0);
+  color:var(--a1);
+  animation:trackExpandPulse 1.8s ease-in-out infinite;
+}
+@keyframes trackExpandPulse{
+  0%,100%{
+    transform:translateY(-50%) translateX(0) scale(1);
+    opacity:.75;
+  }
+  50%{
+    transform:translateY(-52%) translateX(0) scale(1.15);
+    opacity:1;
+  }
+}
+
+/* Saat NP terbuka — nonaktifkan interaksi (redundancy guard) */
+body.np-open .track-info{
+  cursor:default;
+}
+body.np-open .track-info:hover{
+  background:transparent;
+}
+body.np-open .track-expand{
+  opacity:0;
+}
+
+/* Mobile tweak */
+@media (max-width:820px){
+  .track-info{padding:6px 26px 6px 8px}
+  .track-expand{right:4px}
+}
+
+/* ─── Mobile tweak ─── */
+@media (max-width:820px){
+/* ─── Full Player (contained, mobile) ─── */
+.np-overlay{padding:12px 12px 14px}
+.np-head{padding-bottom:8px;grid-template-columns:30px 1fr 30px;gap:4px}
+.np-back{width:30px;height:30px}
+.np-back svg{width:13px;height:13px}
+.np-title{font-size:11.5px}
+.np-subtitle{font-size:9px}
+.np-art{width:min(100%, 160px);border-radius:12px}
+.np-art-placeholder svg{max-width:70px;max-height:70px}
+.np-art-eq{bottom:8px;height:14px;gap:2px}
+.np-art-eq span{width:2px}
+.np-progress-wrap{padding-bottom:10px}
+.np-times{font-size:9px}
+.np-ctrl{height:36px;width:36px}
+.np-ctrl svg{width:16px;height:16px}
+.np-mode-icon{width:16px;height:16px}
+.np-mode-one{font-size:8px;margin-top:-.5px}
+.np-play{height:46px;width:46px}
+.np-play svg{width:18px;height:18px}
+@media (max-height:640px){
+  .np-art{max-width:min(60vw,220px)}
+  .np-art-wrap{padding:6px 0}
+  .np-progress-wrap{padding-bottom:10px}
+}
+/* Mobile tweak */
+@media (max-width:820px){
+  .bg-restore-btn{padding:9px 10px 9px 9px;gap:9px;grid-template-columns:30px minmax(0,1fr) 24px}
+  .bg-restore-icon{width:30px;height:30px;border-radius:8px}
+  .bg-restore-icon svg{width:13px;height:13px}
+  .bg-restore-label{font-size:11px}
+  .bg-restore-meta{font-size:9px}
+  .bg-restore-clear{width:24px;height:24px}
+}
+
+
+/* ─── About modal (mobile) ─── */
+.about-overlay{padding:16px}
+.about-modal{
+  padding:26px 20px 18px;
+  border-radius:20px;
+  max-height:calc(100vh - 32px);
+}
+.about-logo{width:60px;height:60px;border-radius:18px;margin-bottom:14px}
+.about-logo svg{width:28px;height:28px}
+.about-title{font-size:24px}
+.about-tagline{font-size:9.5px;letter-spacing:.18em}
+.about-desc{font-size:11.5px;padding:0 2px;margin-bottom:18px}
+.about-features{grid-template-columns:1fr;gap:6px;margin-bottom:20px}
+.about-feature{padding:9px 10px}
+.about-feat-icon{width:28px;height:28px;border-radius:8px}
+.about-feat-icon svg{width:13px;height:13px}
+.about-feat-text h4{font-size:10.5px}
+.about-feat-text p{font-size:9px}
+.about-cta{padding:12px 18px;font-size:12px}
 @media (max-width:820px){
   .side{top:auto;bottom:100px;right:12px;left:12px;width:auto;max-height:56vh}
   body.ui-hidden .side{transform:translateY(14px) scale(.985)}
@@ -934,7 +2114,7 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
   .lib-idx{width:24px;height:24px;font-size:9.5px}
   .lib-name{font-size:11px}
   .top{left:12px;right:12px;top:12px;padding:8px 10px 8px 12px}
-  .brand-txt p{display:none}
+  .brand-subtitle{display:none}
   .stats{display:none}
   .player{left:12px;right:12px;bottom:12px;padding:10px 14px;gap:12px}
   .volume-wrap{display:none}
@@ -954,22 +2134,22 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
 <canvas id="stage"></canvas>
 
 <header class="panel top">
-  <div class="brand">
-    <div class="brand-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-        <path d="M3 12v0M7 8v8M11 4v16M15 8v8M19 12v0"/>
-      </svg>
-    </div>
-    <div class="brand-txt">
-      <h1>Lumen</h1>
-      <p>AMOLED VISUALIZER</p>
-    </div>
-  </div>
+<button class="brand" id="brandBtn" type="button" aria-label="Tentang Lumen" title="Tentang Lumen">
+  <span class="brand-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <path d="M3 12v0M7 8v8M11 4v16M15 8v8M19 12v0"/>
+    </svg>
+  </span>
+  <span class="brand-txt">
+    <span class="brand-title">Lumen</span>
+    <span class="brand-subtitle">AMOLED VISUALIZER</span>
+  </span>
+</button>
   <div class="tools">
-    <div class="stats">
-      <div><b id="fps">60</b> FPS</div>
-    </div>
-    <button class="tool-btn" id="focusBtn" title="Focus Mode (F)" aria-label="Focus Mode">
+<div class="stats">
+  <div><b id="fps">60</b> FPS</div>
+</div>
+<button class="tool-btn" id="focusBtn" title="Focus Mode (F)" aria-label="Focus Mode">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>
       </svg>
@@ -1000,16 +2180,16 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
       </svg>
       <span>Audio</span>
     </button>
-    <button class="tab" data-tab="theme" role="tab" aria-label="Tema">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
-        <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
-        <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
-        <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
-        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
-      </svg>
-      <span>Tema</span>
-    </button>
+<button class="tab" data-tab="theme" role="tab" aria-label="Warna">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+  </svg>
+  <span>Warna</span>
+</button>
   </nav>
 
   <div class="tab-panels">
@@ -1230,73 +2410,213 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
       </section>
     </div>
 
-    <div class="tab-panel" data-panel="theme">
-      <section class="section">
-        <header class="section-head">
-          <span class="section-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
-              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
-              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
-              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
-              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
-            </svg>
-          </span>
-          <h3>Warna Tema</h3>
-          <span class="section-badge">11</span>
-        </header>
-        <div class="theme-grid" id="themeRow"></div>
-      </section>
-
-      <section class="section">
-        <header class="section-head">
-          <span class="section-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/>
-            </svg>
-          </span>
-          <h3>Warna Custom</h3>
-        </header>
-        <div class="custom-picker">
-          <div class="custom-preview" id="customPreview"></div>
-          <div class="color-row">
-            <span class="color-lbl">Utama<b id="colorPrimaryHex">#ff2bd6</b></span>
-            <input type="color" id="colorPrimary" value="#ff2bd6">
-          </div>
-          <div class="color-row">
-            <span class="color-lbl">Kedua<b id="colorSecondaryHex">#00f0ff</b></span>
-            <input type="color" id="colorSecondary" value="#00f0ff">
-          </div>
-          <div class="color-row">
-            <span class="color-lbl">Aksen<b id="colorAccentHex">#b026ff</b></span>
-            <input type="color" id="colorAccent" value="#b026ff">
-          </div>
-          <button class="custom-save-btn" id="customSaveBtn">Simpan & Aktifkan</button>
-        </div>
-      </section>
-
-      <section class="section">
-        <header class="section-head">
-          <span class="section-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="9" cy="9" r="2"/>
-              <path d="M21 15l-5-5L5 21"/>
-            </svg>
-          </span>
-          <h3>Latar Belakang</h3>
-        </header>
-        <div class="bg-grid" id="bgRow"></div>
-        <input type="file" id="bgImageInput" accept="image/*" hidden>
-      </section>
+<div class="tab-panel" data-panel="theme">
+  <!-- ═══ BEAT COLOR (Horizontal Slider) ═══ -->
+  <section class="section">
+    <header class="section-head">
+      <span class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/>
+        </svg>
+      </span>
+      <h3>Warna Efek Beat</h3>
+      <span class="active-pill active" id="activePillBeat">Hijau</span>
+    </header>
+    <div class="effect-slider">
+      <div class="effect-well" id="wellBeat">
+        <div class="effect-track" id="sliderBeat" role="listbox" aria-label="Warna efek beat"></div>
+        <button class="slider-nav prev" data-target="sliderBeat" aria-label="Sebelumnya">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button class="slider-nav next" data-target="sliderBeat" aria-label="Berikutnya">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+      <div class="scroll-progress"><div class="scroll-progress-thumb" id="progBeat"></div></div>
     </div>
-  </div>
+  </section>
+
+  <!-- ═══ CUSTOM BEAT COLORS ═══ -->
+  <section class="section">
+    <header class="section-head">
+      <span class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/>
+        </svg>
+      </span>
+      <h3>Kustom Warna Beat</h3>
+    </header>
+    <div class="custom-picker">
+      <div class="custom-preview" id="customPreview"></div>
+      <div class="color-row">
+        <span class="color-lbl">Utama<b id="colorPrimaryHex">#00ff88</b></span>
+        <input type="color" id="colorPrimary" value="#00ff88">
+      </div>
+      <div class="color-row">
+        <span class="color-lbl">Kedua<b id="colorSecondaryHex">#7cff3d</b></span>
+        <input type="color" id="colorSecondary" value="#7cff3d">
+      </div>
+      <div class="color-row">
+        <span class="color-lbl">Aksen<b id="colorAccentHex">#00c970</b></span>
+        <input type="color" id="colorAccent" value="#00c970">
+      </div>
+      <button class="custom-save-btn" id="customSaveBtn">Simpan &amp; Aktifkan</button>
+    </div>
+  </section>
+
+  <!-- ═══ BACKGROUND ═══ -->
+  <section class="section">
+    <header class="section-head">
+      <span class="section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="9" cy="9" r="2"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+      </span>
+      <h3>Latar Belakang</h3>
+    </header>
+    <div class="bg-grid" id="bgRow"></div>
+
+    <!-- ═══ CUSTOM BG COLOR (NEW) ═══ -->
+    <div class="bg-custom-color-wrap" id="bgCustomColorWrap">
+      <div class="bg-custom-color-info">
+        <span class="bg-custom-color-title">Warna Kustom</span>
+        <span class="bg-custom-color-hex" id="bgCustomColorHex">#000000</span>
+      </div>
+      <input type="color" id="bgCustomColor" value="#000000" aria-label="Pilih warna kustom">
+    </div>
+
+    <!-- ═══ RESTORE BUTTON (existing) ═══ -->
+    <button class="bg-restore-btn" id="bgRestoreBtn" hidden type="button">
+      <span class="bg-restore-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+      </span>
+      <span class="bg-restore-body">
+        <span class="bg-restore-label">Gunakan Foto Tersimpan</span>
+        <span class="bg-restore-meta" id="bgRestoreMeta">Klik untuk mengaktifkan kembali</span>
+      </span>
+      <span class="bg-restore-clear" id="bgRestoreClear" role="button" aria-label="Hapus foto tersimpan" title="Hapus foto dari penyimpanan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </span>
+    </button>
+
+    <input type="file" id="bgImageInput" accept="image/*" hidden>
+  </section>
+</div>
 
   <!-- ═══ BRAND CREDIT ═══ -->
   <div class="brand-credit">
     crafted by <a href="https://github.com/Askolani" target="_blank" rel="noopener">Askolani</a>
   </div>
+
+  <!-- ═══ FULL PLAYER VIEW (contained in card, switches from playlist) ═══ -->
+  <div class="np-overlay" id="npOverlay" role="dialog" aria-modal="true" aria-labelledby="npTitle">
+    <div class="np-bg" aria-hidden="true"></div>
+
+    <header class="np-head">
+      <button class="np-back" id="npBack" aria-label="Kembali ke daftar" title="Kembali">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="np-head-info">
+        <h2 class="np-title" id="npTitle">Belum ada lagu</h2>
+        <p class="np-subtitle" id="npSubtitle">Pilih dari pustaka</p>
+      </div>
+    </header>
+
+    <div class="np-art-wrap">
+      <div class="np-art" id="npArt">
+        <div class="np-art-placeholder" id="npArtPlaceholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V5l12-2v13"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="18" cy="16" r="3"/>
+          </svg>
+        </div>
+        <div class="np-art-eq" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="np-progress-wrap">
+      <div class="np-progress" id="npProgress" role="slider" aria-label="Progres lagu"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+        <div class="np-progress-track">
+          <div class="np-progress-fill" id="npProgressFill"></div>
+          <div class="np-progress-thumb" id="npProgressThumb"></div>
+        </div>
+      </div>
+      <div class="np-times">
+        <span id="npCurTime">0:00</span>
+        <span id="npDurTime">0:00</span>
+      </div>
+    </div>
+
+<div class="np-controls">
+  <!-- ═══ MODE CYCLE: Off → Repeat All → Repeat One → Shuffle ═══ -->
+  <button class="np-ctrl np-mode" id="npMode" data-mode="off"
+          aria-label="Mode: normal" title="Mode: normal">
+    <!-- Repeat icon (visible saat off / repeat-all / repeat-one) -->
+    <svg class="np-mode-icon np-mode-icon-repeat" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 2l4 4-4 4"/>
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+      <path d="M7 22l-4-4 4-4"/>
+      <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+    </svg>
+
+    <!-- Shuffle icon (visible saat shuffle) -->
+    <svg class="np-mode-icon np-mode-icon-shuffle" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 3h5v5"/>
+      <path d="M4 20L21 3"/>
+      <path d="M21 16v5h-5"/>
+      <path d="M15 15l6 6"/>
+      <path d="M4 4l5 5"/>
+    </svg>
+
+    <!-- "1" badge (visible saat repeat-one) -->
+    <span class="np-mode-one" aria-hidden="true">1</span>
+  </button>
+
+  <button class="np-ctrl" id="npPrev" aria-label="Sebelumnya" title="Sebelumnya">
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 6h2v12H6zM20 6v12l-9-6z"/>
+    </svg>
+  </button>
+  <button class="np-play" id="npPlay" aria-label="Play" title="Play / Pause">
+    <svg class="np-play-icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+    <svg class="np-pause-icon" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="5" width="4" height="14" rx="1"/>
+      <rect x="14" y="5" width="4" height="14" rx="1"/>
+    </svg>
+  </button>
+  <button class="np-ctrl" id="npNext" aria-label="Berikutnya" title="Berikutnya">
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16 6h2v12h-2zM4 6l9 6-9 6z"/>
+    </svg>
+  </button>
+  <button class="np-ctrl" id="npQueue" aria-label="Antrean" title="Antrean">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h13M3 12h13M3 18h9"/>
+      <circle cx="19" cy="16" r="2"/>
+      <path d="M21 16V8l-4 1"/>
+    </svg>
+  </button>
+</div>
 </aside>
 
 <div class="cta" id="cta">
@@ -1328,17 +2648,23 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6l9 6-9 6z"/></svg>
     </button>
   </div>
-  <div class="track-wrap">
-    <div class="track-info">
-      <span class="track-title" id="trackTitle">Belum ada lagu</span>
-      <span class="track-sub" id="trackSub">Pilih dari Pustaka atau File</span>
-    </div>
-    <div class="progress-wrap">
-      <span id="curTime">0:00</span>
-      <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
-      <span id="durTime">0:00</span>
-    </div>
+<div class="track-wrap">
+  <div class="track-info" id="trackInfo" role="button" tabindex="0"
+       aria-label="Buka tampilan pemutar lengkap" title="Buka pemutar lengkap">
+    <span class="track-title" id="trackTitle">Belum ada lagu</span>
+    <span class="track-sub" id="trackSub">Pilih dari Pustaka atau File</span>
+    <span class="track-expand" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 15l-6-6-6 6"/>
+      </svg>
+    </span>
   </div>
+  <div class="progress-wrap">
+    <span id="curTime">0:00</span>
+    <div class="progress" id="progress"><div class="progress-fill" id="progressFill"></div></div>
+    <span id="durTime">0:00</span>
+  </div>
+</div>
   <div class="volume-wrap">
     <svg id="volIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M11 5L6 9H2v6h4l5 4V5z"/>
@@ -1394,6 +2720,182 @@ body.live-source .progress-wrap,body.live-source .volume-wrap{
     </div>
   </div>
 </div>
+<!-- ═══ CROP MODAL ═══ -->
+<div class="crop-overlay" id="cropOverlay" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div class="crop-modal">
+    <header class="crop-head">
+      <div class="crop-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2v14a2 2 0 0 0 2 2h14"/>
+          <path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+        </svg>
+        <h3 id="cropTitle">Pangkas Gambar</h3>
+      </div>
+      <button class="crop-close" id="cropClose" aria-label="Tutup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="crop-stage-wrap">
+      <div class="crop-stage" id="cropStage">
+        <canvas id="cropCanvas"></canvas>
+        <div class="crop-grid" aria-hidden="true"></div>
+        <div class="crop-corners" aria-hidden="true"><span></span></div>
+        <div class="crop-loading" id="cropLoading">
+          <span class="spinner-mini"></span>
+          <span>Memuat gambar…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="crop-controls">
+      <div class="crop-ratio-row" id="cropRatioRow" role="group" aria-label="Aspek rasio">
+        <button class="crop-ratio-btn active" data-ratio="screen">Layar</button>
+        <button class="crop-ratio-btn" data-ratio="1:1">1:1</button>
+        <button class="crop-ratio-btn" data-ratio="16:9">16:9</button>
+        <button class="crop-ratio-btn" data-ratio="9:16">9:16</button>
+        <button class="crop-ratio-btn" data-ratio="4:3">4:3</button>
+        <button class="crop-ratio-btn" data-ratio="3:4">3:4</button>
+      </div>
+
+      <div class="crop-zoom-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="Perbesar">
+        <span class="crop-zoom-val" id="cropZoomVal">1.00×</span>
+      </div>
+    </div>
+
+    <p class="crop-hint">Geser untuk mengatur posisi · Cubit atau scroll untuk zoom</p>
+
+    <footer class="crop-actions">
+      <button class="crop-btn cancel" id="cropCancel">Batal</button>
+      <button class="crop-btn confirm" id="cropApply">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12l5 5L20 7"/>
+        </svg>
+        Simpan &amp; Terapkan
+      </button>
+    </footer>
+  </div>
+</div>
+<!-- ═══ ABOUT / LANDING ═══ -->
+<div class="about-overlay" id="aboutOverlay" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+  <div class="about-modal">
+    <button class="about-close" id="aboutClose" aria-label="Tutup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <div class="about-hero">
+      <div class="about-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M3 12v0M7 8v8M11 4v16M15 8v8M19 12v0"/>
+        </svg>
+      </div>
+      <h1 class="about-title" id="aboutTitle">Lumen</h1>
+      <p class="about-tagline">AMOLED MUSIC VISUALIZER</p>
+    </div>
+
+    <p class="about-desc">
+      Ubah musik menjadi pertunjukan cahaya. Dirancang untuk layar AMOLED dengan warna hidup, animasi halus, dan kontrol penuh atas setiap pixel.
+    </p>
+
+    <div class="about-features">
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20V10M9 20V4M14 20v-8M19 20V7"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>24 Mode Visualizer</h4>
+          <p>Bars, radial, fireworks, aurora, dan lainnya</p>
+        </div>
+      </div>
+
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+            <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+            <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>11 Tema + Custom</h4>
+          <p>Palet warna siap pakai atau racik sendiri</p>
+        </div>
+      </div>
+
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14"/>
+            <path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>Crop Latar Belakang</h4>
+          <p>Pangkas & atur foto sebelum diterapkan</p>
+        </div>
+      </div>
+
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/>
+            <path d="M21 2v6h-6"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>Penyimpanan Persisten</h4>
+          <p>Tema, lagu, dan background tersimpan otomatis</p>
+        </div>
+      </div>
+
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2"/>
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M10 14h.01M14 14h.01M18 14h.01"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>Shortcut Lengkap</h4>
+          <p>Kontrol penuh via keyboard tanpa mouse</p>
+        </div>
+      </div>
+
+      <div class="about-feature">
+        <span class="about-feat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2"/>
+            <path d="M12 18h.01"/>
+          </svg>
+        </span>
+        <div class="about-feat-text">
+          <h4>Mobile-First</h4>
+          <p>Responsif sempurna dari 320px hingga 4K</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="about-cta" id="aboutStart">
+      <span>Mulai Visualisasi</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12h14M13 6l6 6-6 6"/>
+      </svg>
+    </button>
+
+    <p class="about-credit">crafted by <a href="https://github.com/Askolani" target="_blank" rel="noopener">Askolani</a></p>
+  </div>
+</div>
 
 <div class="hint" id="hint">Klik di luar menu untuk sembunyikan · <b>Esc</b> untuk keluar</div>
 <div class="toast" id="toast"></div>
@@ -1415,14 +2917,14 @@ const THEMES = {
 };
 
 const BG_PRESETS = [
-  { id:'black',  label:'Hitam',  css:'#000000' },
-  { id:'slate',  label:'Slate',  css:'#0f1115' },
-  { id:'navy',   label:'Navy',   css:'#0a1524' },
-  { id:'plum',   label:'Plum',   css:'#150a1f' },
-  { id:'sunset', label:'Sunset', css:'linear-gradient(160deg,#2b0a1a 0%,#0a0a2b 100%)' },
-  { id:'ocean',  label:'Ocean',  css:'linear-gradient(160deg,#031424 0%,#0a3a4a 100%)' },
-  { id:'forest', label:'Forest', css:'linear-gradient(160deg,#0a1f0a 0%,#0a1428 100%)' },
-  { id:'rose',   label:'Rose',   css:'linear-gradient(160deg,#2a0a1a 0%,#1a0a2a 100%)' },
+  { id:'black',  label:'Hitam',  css:'#000000',                                         kind:'color'    },
+  { id:'slate',  label:'Slate',  css:'#0f1115',                                         kind:'color'    },
+  { id:'navy',   label:'Navy',   css:'#0a1524',                                         kind:'color'    },
+  { id:'plum',   label:'Plum',   css:'#150a1f',                                         kind:'color'    },
+  { id:'sunset', label:'Sunset', css:'linear-gradient(160deg,#2b0a1a 0%,#0a0a2b 100%)', kind:'gradient' },
+  { id:'ocean',  label:'Ocean',  css:'linear-gradient(160deg,#031424 0%,#0a3a4a 100%)', kind:'gradient' },
+  { id:'forest', label:'Forest', css:'linear-gradient(160deg,#0a1f0a 0%,#0a1428 100%)', kind:'gradient' },
+  { id:'rose',   label:'Rose',   css:'linear-gradient(160deg,#2a0a1a 0%,#1a0a2a 100%)', kind:'gradient' },
 ];
 
 const SPECTRUM_MODES = [
@@ -1470,9 +2972,24 @@ const els = {
   activePillSpectrum: $('activePillSpectrum'), activePillOther: $('activePillOther'),
   sourceRow: $('sourceRow'), rotRow: $('rotRow'), themeRow: $('themeRow'),
   bgRow: $('bgRow'), bgImageInput: $('bgImageInput'),
-  colorPrimary: $('colorPrimary'), colorSecondary: $('colorSecondary'), colorAccent: $('colorAccent'),
-  colorPrimaryHex: $('colorPrimaryHex'), colorSecondaryHex: $('colorSecondaryHex'), colorAccentHex: $('colorAccentHex'),
-  customPreview: $('customPreview'), customSaveBtn: $('customSaveBtn'),
+bgRestoreBtn: $('bgRestoreBtn'), bgRestoreMeta: $('bgRestoreMeta'),
+bgRestoreClear: $('bgRestoreClear'),
+colorPrimary: $('colorPrimary'), colorSecondary: $('colorSecondary'), colorAccent: $('colorAccent'),
+colorPrimaryHex: $('colorPrimaryHex'), colorSecondaryHex: $('colorSecondaryHex'), colorAccentHex: $('colorAccentHex'),
+customPreview: $('customPreview'), customSaveBtn: $('customSaveBtn'),
+sliderBeat: $('sliderBeat'), activePillBeat: $('activePillBeat'),
+bgCustomColor: $('bgCustomColor'), bgCustomColorWrap: $('bgCustomColorWrap'),
+bgCustomColorHex: $('bgCustomColorHex'),
+// ─── Now Playing ───
+npOverlay: $('npOverlay'), npBack: $('npBack'),
+npTitle: $('npTitle'), npSubtitle: $('npSubtitle'),
+npArtPlaceholder: $('npArtPlaceholder'),
+npProgress: $('npProgress'), npProgressFill: $('npProgressFill'),
+npProgressThumb: $('npProgressThumb'),
+npCurTime: $('npCurTime'), npDurTime: $('npDurTime'),
+npMode: $('npMode'),
+npPrev: $('npPrev'), npNext: $('npNext'),
+npPlay: $('npPlay'), npQueue: $('npQueue'),
   sensSlider: $('sensSlider'), sensVal: $('sensVal'),
   cta: $('cta'), ctaBtn: $('ctaBtn'),
   fileInput: $('fileInput'), multiFileInput: $('multiFileInput'),
@@ -1494,15 +3011,32 @@ const els = {
   permOverlay: $('permOverlay'),
   permConfirm: $('permConfirm'),
   permCancel: $('permCancel'),
+  // ─── About / Landing ───
+  aboutOverlay: $('aboutOverlay'),
+  aboutClose: $('aboutClose'),
+  aboutStart: $('aboutStart'),
+  brandBtn: $('brandBtn'),
 };
 
 const state = {
-  viz: 'bars', theme: 'hijau', rotation: 0, sensitivity: 1.4,
-  source: null, playing: false, hasAudio: false, fileName: '',
-  transitioning: 0, focusMode: false, uiHidden: false,
-  bass: 0, beatPulse: 0,
-  bgId: 'black', bgCustomUrl: null,
-  customTheme: { primary:'#ff2bd6', secondary:'#00f0ff', accent:'#b026ff' },
+  viz: 'bars',
+  beatTheme: 'hijau',                          // RENAMED dari 'theme'
+  rotation: 0,
+  sensitivity: 1.4,
+  source: null,
+  playing: false,
+  hasAudio: false,
+  fileName: '',
+  transitioning: 0,
+  focusMode: false,
+  uiHidden: false,
+  bass: 0,
+  beatPulse: 0,
+bgId: 'black',
+bgCustomSrc: null,
+bgCustomColor: null,
+playMode: 'off',   // 'off' | 'repeat-all' | 'repeat-one' | 'shuffle'
+customBeatColors: { primary:'#00ff88', secondary:'#7cff3d', accent:'#00c970' },
 };
 const viewport = { w: 0, h: 0, dpr: 1 };
 const library = {
@@ -2498,118 +4032,166 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
-/* ═══ THEME ═══ */
-function getActiveThemeColors(){
-  if (state.theme === 'custom') return state.customTheme;
-  return THEMES[state.theme] || THEMES.hijau;
-}
-function applyTheme(id, save=true){
-  let colors;
-  if (id === 'custom') colors = state.customTheme;
-  else colors = THEMES[id];
-  if (!colors) { id = 'hijau'; colors = THEMES.hijau; }
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ UI THEME — LOCKED TO GREEN ═══
+   Dipanggil SEKALI saat init. Tidak pernah diubah oleh user.
+   ═══════════════════════════════════════════════════════════════════ */
+function applyUITheme(){
+  const c = THEMES.hijau;
   const root = document.documentElement.style;
-  root.setProperty('--a1', colors.primary);
-  root.setProperty('--a2', colors.secondary);
-  root.setProperty('--a3', colors.accent);
-  root.setProperty('--a1-rgb', hexToRgbStr(colors.primary));
-  root.setProperty('--a2-rgb', hexToRgbStr(colors.secondary));
-  root.setProperty('--a3-rgb', hexToRgbStr(colors.accent));
-  root.setProperty('--grad', `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 50%, ${colors.secondary} 100%)`);
-  state.theme = id;
-  state.transitioning = 0.6;
-  document.querySelectorAll('.theme-card').forEach(c => {
-    c.classList.toggle('active', c.dataset.theme === id);
-  });
-  if (save) idbSet('themeId', id).catch(()=>{});
+  root.setProperty('--a1', c.primary);
+  root.setProperty('--a2', c.secondary);
+  root.setProperty('--a3', c.accent);
+  root.setProperty('--a1-rgb', hexToRgbStr(c.primary));
+  root.setProperty('--a2-rgb', hexToRgbStr(c.secondary));
+  root.setProperty('--a3-rgb', hexToRgbStr(c.accent));
+  root.setProperty('--grad',
+    `linear-gradient(135deg, ${c.primary} 0%, ${c.accent} 50%, ${c.secondary} 100%)`);
 }
-function buildThemeCards(){
-  els.themeRow.innerHTML = '';
+
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ BEAT COLOR — user-controllable visualizer palette ═══
+   Hanya memengaruhi renderer visualizer, TIDAK menyentuh CSS root.
+   ═══════════════════════════════════════════════════════════════════ */
+function getActiveThemeColors(){
+  if (state.beatTheme === 'custom') return state.customBeatColors;
+  return THEMES[state.beatTheme] || THEMES.hijau;
+}
+
+function setBeatColor(id, save = true){
+  const valid = id === 'custom' || THEMES[id];
+  if (!valid) id = 'hijau';
+  state.beatTheme = id;
+  state.transitioning = 0.6;
+
+  // Update card active states
+  document.querySelectorAll('.beat-color-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.beat === id);
+  });
+
+  // Update active pill
+  const pill = els.activePillBeat;
+  if (pill){
+    pill.textContent = id === 'custom' ? 'Custom' : (THEMES[id]?.label || 'Hijau');
+    pill.classList.add('active');
+  }
+
+  // Scroll active card ke tengah
+  const active = document.querySelector(`.beat-color-card[data-beat="${id}"]`);
+  if (active) active.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+
+  if (save) idbSet('beatThemeId', id).catch(()=>{});
+}
+
+function buildBeatColorCards(){
+  const track = els.sliderBeat;
+  if (!track) return;
+  track.innerHTML = '';
+
   Object.entries(THEMES).forEach(([id, th]) => {
     const card = document.createElement('button');
-    card.className = 'theme-card';
-    card.dataset.theme = id;
+    card.type = 'button';
+    card.className = 'beat-color-card';
+    card.dataset.beat = id;
     card.title = th.label;
+    card.setAttribute('role', 'option');
+    card.setAttribute('aria-label', th.label);
     card.innerHTML = `
-      <div class="theme-preview" style="background:linear-gradient(135deg, ${th.primary}, ${th.accent} 50%, ${th.secondary})"></div>
-      <span class="theme-name">${th.label}</span>
-      <span class="theme-check">${CHECK_SVG}</span>
+      <span class="beat-color-swatch" style="background:linear-gradient(135deg, ${th.primary} 0%, ${th.accent} 50%, ${th.secondary} 100%)">
+        <span class="beat-color-dot"></span>
+      </span>
+      <span class="beat-color-name">${th.label}</span>
     `;
-    card.addEventListener('click', () => applyTheme(id));
-    els.themeRow.appendChild(card);
+    card.addEventListener('click', () => setBeatColor(id));
+    track.appendChild(card);
   });
-  const c = state.customTheme;
-  const customCard = document.createElement('button');
-  customCard.className = 'theme-card';
-  customCard.dataset.theme = 'custom';
-  customCard.title = 'Custom';
-  customCard.innerHTML = `
-    <div class="theme-preview" id="customCardPreview" style="background:linear-gradient(135deg, ${c.primary}, ${c.accent} 50%, ${c.secondary})"></div>
-    <span class="theme-name">Custom</span>
-    <span class="theme-check">${CHECK_SVG}</span>
+
+  // Custom card
+  const c = state.customBeatColors;
+  const cc = document.createElement('button');
+  cc.type = 'button';
+  cc.className = 'beat-color-card';
+  cc.dataset.beat = 'custom';
+  cc.title = 'Custom';
+  cc.setAttribute('role', 'option');
+  cc.setAttribute('aria-label', 'Custom');
+  cc.innerHTML = `
+    <span class="beat-color-swatch" id="customBeatSwatch"
+          style="background:linear-gradient(135deg, ${c.primary} 0%, ${c.accent} 50%, ${c.secondary} 100%)">
+      <span class="beat-color-dot"></span>
+    </span>
+    <span class="beat-color-name">Custom</span>
   `;
-  customCard.addEventListener('click', () => applyTheme('custom'));
-  els.themeRow.appendChild(customCard);
+  cc.addEventListener('click', () => setBeatColor('custom'));
+  track.appendChild(cc);
 }
+
 function updateCustomPreview(){
-  const c = state.customTheme;
+  const c = state.customBeatColors;
   const grad = `linear-gradient(135deg, ${c.primary} 0%, ${c.accent} 50%, ${c.secondary} 100%)`;
-  els.customPreview.style.background = grad;
-  const cp = document.getElementById('customCardPreview');
-  if (cp) cp.style.background = grad;
-  els.colorPrimaryHex.textContent = c.primary.toUpperCase();
-  els.colorSecondaryHex.textContent = c.secondary.toUpperCase();
-  els.colorAccentHex.textContent = c.accent.toUpperCase();
+  if (els.customPreview) els.customPreview.style.background = grad;
+  const swatch = document.getElementById('customBeatSwatch');
+  if (swatch) swatch.style.background = grad;
+  if (els.colorPrimaryHex)   els.colorPrimaryHex.textContent = c.primary.toUpperCase();
+  if (els.colorSecondaryHex) els.colorSecondaryHex.textContent = c.secondary.toUpperCase();
+  if (els.colorAccentHex)    els.colorAccentHex.textContent = c.accent.toUpperCase();
 }
+
 function onColorInput(){
-  state.customTheme = {
+  state.customBeatColors = {
     primary: els.colorPrimary.value,
     secondary: els.colorSecondary.value,
     accent: els.colorAccent.value,
   };
   updateCustomPreview();
-  if (state.theme === 'custom'){
-    const root = document.documentElement.style;
-    const c = state.customTheme;
-    root.setProperty('--a1', c.primary);
-    root.setProperty('--a2', c.secondary);
-    root.setProperty('--a3', c.accent);
-    root.setProperty('--a1-rgb', hexToRgbStr(c.primary));
-    root.setProperty('--a2-rgb', hexToRgbStr(c.secondary));
-    root.setProperty('--a3-rgb', hexToRgbStr(c.accent));
-    root.setProperty('--grad', `linear-gradient(135deg, ${c.primary} 0%, ${c.accent} 50%, ${c.secondary} 100%)`);
+  // Live-update visualizer jika mode custom sedang aktif
+  if (state.beatTheme === 'custom'){
+    state.transitioning = 0.4;
   }
 }
-async function saveCustomTheme(){
-  applyTheme('custom');
+
+async function saveCustomBeatColors(){
+  setBeatColor('custom');
   try {
-    await idbSet('customTheme', state.customTheme);
-    await idbSet('themeId', 'custom');
+    await idbSet('customBeatColors', state.customBeatColors);
+    await idbSet('beatThemeId', 'custom');
   } catch(_){}
-  toast('Tema custom disimpan & aktif', 'success');
+  toast('Warna beat custom disimpan & aktif', 'success');
 }
+
 els.colorPrimary.addEventListener('input', onColorInput);
 els.colorSecondary.addEventListener('input', onColorInput);
 els.colorAccent.addEventListener('input', onColorInput);
-els.customSaveBtn.addEventListener('click', saveCustomTheme);
-async function loadSavedTheme(){
+els.customSaveBtn.addEventListener('click', saveCustomBeatColors);
+
+async function loadSavedBeatColor(){
   try {
-    const savedId = await idbGet('themeId');
-    const custom = await idbGet('customTheme');
-    if (custom && custom.primary) {
-      state.customTheme = custom;
-      els.colorPrimary.value = custom.primary;
+    // ─── Baca key baru, fallback ke key lama (migration) ───
+    let beatId = await idbGet('beatThemeId');
+    let custom = await idbGet('customBeatColors');
+
+    if (!beatId){
+      const oldId = await idbGet('themeId');
+      if (oldId) beatId = oldId;
+    }
+    if (!custom){
+      const oldCustom = await idbGet('customTheme');
+      if (oldCustom) custom = oldCustom;
+    }
+
+    if (custom && custom.primary){
+      state.customBeatColors = custom;
+      els.colorPrimary.value   = custom.primary;
       els.colorSecondary.value = custom.secondary;
-      els.colorAccent.value = custom.accent;
+      els.colorAccent.value    = custom.accent;
     }
     updateCustomPreview();
-    buildThemeCards();
-    if (savedId) applyTheme(savedId, false);
-    else applyTheme('hijau', false);
+    buildBeatColorCards();
+    setBeatColor(beatId || 'hijau', false);
   } catch(_){
     updateCustomPreview();
-    buildThemeCards();
-    applyTheme('hijau', false);
+    buildBeatColorCards();
+    setBeatColor('hijau', false);
   }
 }
 
@@ -2644,14 +4226,30 @@ async function toggleFocus(){
     if (document.fullscreenElement){ try { await document.exitFullscreen(); } catch(_){} }
   }
 }
+/**
+ * Unified click handler — bekerja SAMA untuk focus & non-focus mode.
+ * Aturan:
+ *   · Klik di luar panel/CTA saat UI visible → sembunyikan UI
+ *   · Klik di mana pun saat UI hidden        → tampilkan UI kembali
+ *   · Klik di dalam panel/CTA                → biarkan, tidak ada toggle
+ */
 document.addEventListener('click', (e) => {
-  if (!state.focusMode) return;
+  // ─── Guard: transisi / modal / overlay aktif ───
   if (document.body.classList.contains('ui-waking')) return;
   if (els.dragOverlay.classList.contains('active')) return;
+  if (els.permOverlay.classList.contains('active')) return;
+  if (typeof cropEditor !== 'undefined' && cropEditor.isOpen()) return;
+  if (typeof about !== 'undefined' && about.isOpen()) return;
+  if (typeof about !== 'undefined' && about.justClosed()) return;  // ← NEW: grace period
+  if (typeof np !== 'undefined' && np.isOpen) return;
+
   const insideUI = e.target.closest('.panel, .cta');
+
   if (state.uiHidden){
+    // UI sedang tersembunyi → klik di mana pun = munculkan kembali
     showUI();
   } else if (!insideUI){
+    // UI terlihat, klik di luar panel/CTA = sembunyikan
     hideUI();
   }
 });
@@ -2783,7 +4381,8 @@ function updateSliderState(sliderEl){
   if (prev) prev.disabled = !canLeft;
   if (next) next.disabled = !canRight;
 }
-[els.sliderSpectrum, els.sliderOther].forEach(slider => {
+[els.sliderSpectrum, els.sliderOther, els.sliderBeat].forEach(slider => {
+  if (!slider) return;
   slider.addEventListener('scroll', () => updateSliderState(slider), { passive: true });
   setTimeout(() => updateSliderState(slider), 60);
 });
@@ -2796,8 +4395,125 @@ document.querySelectorAll('.slider-nav').forEach(btn => {
     track.scrollBy({ left: dir * 220, behavior: 'smooth' });
   });
 });
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ BACKGROUND PERSISTENCE LAYER ═══
+   Dual-layer: IndexedDB (Blob, primary) + localStorage (DataURL, mirror)
+   ═══════════════════════════════════════════════════════════════════ */
+const LS_KEYS = {
+  bgMode:  'lumen_bg_mode',     // 'color' | 'gradient' | 'custom_image'
+  bgImage: 'lumen_custom_bg',   // DataURL string (base64)
+  bgId:    'lumen_bg_id',       // preset id saat mode != custom_image
+  bgColor: 'lumen_bg_color',    // Hex string kustom bg color (mode 'custom_color')
+};
 
-/* ═══ BACKGROUND ═══ */
+/** Apakah string adalah blob: URL (bukan DataURL)? */
+function isObjectUrl(str){
+  return typeof str === 'string' && str.startsWith('blob:');
+}
+
+/** Revoke ObjectURL dengan aman (DataURL di-skip). */
+function releaseBgSrc(src){
+  if (isObjectUrl(src)){
+    try { URL.revokeObjectURL(src); } catch(_){}
+  }
+}
+
+/** Konversi Blob → DataURL (async, non-blocking). */
+function blobToDataURL(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Tentukan mode dari bgId. */
+function getBgMode(bgId){
+  if (bgId === 'custom') return 'custom_image';
+  if (bgId === 'custom_color') return 'color';
+  const preset = BG_PRESETS.find(b => b.id === bgId);
+  return preset?.kind === 'gradient' ? 'gradient' : 'color';
+}
+
+/** Tulis bgId + mode ke localStorage. Tidak menyentuh foto. */
+function persistBgSelection(bgId){
+  try {
+    localStorage.setItem(LS_KEYS.bgId, bgId);
+    localStorage.setItem(LS_KEYS.bgMode, getBgMode(bgId));
+  } catch(_){}
+}
+
+/**
+ * Simpan DataURL foto ke localStorage (mirror).
+ * Return true jika berhasil, false jika quota exceeded / error.
+ */
+function persistBgImageToLS(dataUrl){
+  try {
+    localStorage.setItem(LS_KEYS.bgImage, dataUrl);
+    return true;
+  } catch(e){
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22)){
+      console.warn('[Lumen] localStorage quota exceeded — fallback ke IndexedDB saja');
+      // Hapus partial state jika ada
+      try { localStorage.removeItem(LS_KEYS.bgImage); } catch(_){}
+      return false;
+    }
+    console.warn('[Lumen] localStorage error:', e);
+    return false;
+  }
+}
+
+/** Baca foto tersimpan dari localStorage (sync). */
+function readBgImageFromLS(){
+  try {
+    return localStorage.getItem(LS_KEYS.bgImage) || null;
+  } catch(_){
+    return null;
+  }
+}
+
+/** Baca bgId dari localStorage (sync). */
+function readBgIdFromLS(){
+  try {
+    return localStorage.getItem(LS_KEYS.bgId) || null;
+  } catch(_){
+    return null;
+  }
+}
+
+/** Hapus foto dari localStorage + IndexedDB. */
+async function clearStoredBgImage(){
+  try { localStorage.removeItem(LS_KEYS.bgImage); } catch(_){}
+  try { await idbSet('bgImage', null); } catch(_){}
+}
+
+/** Update visibility & thumbnail pada tombol restore. */
+function updateRestoreBtnUI(){
+  const btn = els.bgRestoreBtn;
+  const icon = btn.querySelector('.bg-restore-icon');
+  const meta = els.bgRestoreMeta;
+  const hasStored = !!state.bgCustomSrc;
+  const isActive = state.bgId === 'custom' && hasStored;
+
+  btn.hidden = !hasStored;
+  btn.classList.toggle('active', isActive);
+
+  if (hasStored){
+    // Thumbnail preview
+    icon.style.backgroundImage = `url("${state.bgCustomSrc}")`;
+    icon.classList.add('has-thumb');
+    meta.textContent = isActive
+      ? 'Sedang aktif · klik preset untuk ganti'
+      : 'Klik untuk mengaktifkan kembali';
+  } else {
+    icon.style.backgroundImage = '';
+    icon.classList.remove('has-thumb');
+  }
+}
+/* ═══════════════════════════════════════════════════════════════
+   ═══ BACKGROUND ═══
+   ═══════════════════════════════════════════════════════════════ */
 BG_PRESETS.forEach(preset => {
   const card = document.createElement('button');
   card.className = 'bg-card';
@@ -2811,6 +4527,7 @@ BG_PRESETS.forEach(preset => {
   card.addEventListener('click', () => selectBg(preset.id));
   els.bgRow.appendChild(card);
 });
+
 const uploadCard = document.createElement('button');
 uploadCard.className = 'bg-card upload';
 uploadCard.dataset.bg = 'custom';
@@ -2824,64 +4541,273 @@ uploadCard.innerHTML = `
 `;
 uploadCard.addEventListener('click', () => els.bgImageInput.click());
 els.bgRow.appendChild(uploadCard);
+
+/**
+ * Terapkan background berdasarkan state saat ini.
+ * Prioritas: custom image (jika aktif) > preset (color/gradient).
+ */
+/**
+ * Terapkan background ke <body> dengan reset eksplisit.
+ *
+ * Kenapa eksplisit per-property (bukan shorthand)?
+ *   Shorthand `background:` berpotensi menyisakan sub-property yang
+ *   ter-set oleh panggilan sebelumnya (mis. background-attachment:fixed
+ *   tetap nyangkut saat mode color diterapkan). Reset manual menjamin
+ *   state DOM benar-benar bersih sebelum set nilai baru.
+ */
 function applyBackground(){
-  if (state.bgId === 'custom' && state.bgCustomUrl){
-    document.body.style.background = `#000 url("${state.bgCustomUrl}") center/cover no-repeat`;
+  const el = document.body;
+
+  // ─── STEP 1: FULL RESET (semua sub-property) ───
+  el.style.backgroundColor        = '';
+  el.style.backgroundImage        = '';
+  el.style.backgroundPosition     = '';
+  el.style.backgroundSize         = '';
+  el.style.backgroundRepeat       = '';
+  el.style.backgroundAttachment   = '';
+
+  // ─── STEP 2: Apply berdasarkan mode ───
+  if (state.bgId === 'custom' && state.bgCustomSrc){
+    // Mode custom image (hasil crop)
+    el.style.backgroundColor      = '#000';
+    el.style.backgroundImage      = `url("${state.bgCustomSrc}")`;
+    el.style.backgroundPosition   = 'center';
+    el.style.backgroundSize       = 'cover';
+    el.style.backgroundRepeat     = 'no-repeat';
+    el.style.backgroundAttachment = 'fixed';
+
+  } else if (state.bgId === 'custom_color' && state.bgCustomColor){
+    // Mode custom solid color
+    el.style.backgroundColor = state.bgCustomColor;
+
   } else {
+    // Mode preset (color atau gradient)
     const preset = BG_PRESETS.find(b => b.id === state.bgId) || BG_PRESETS[0];
-    document.body.style.background = preset.css;
-    document.body.style.backgroundAttachment = '';
-    document.body.style.backgroundSize = '';
-    document.body.style.backgroundPosition = '';
-    document.body.style.backgroundRepeat = '';
+    // Preset bisa berupa '#000' atau 'linear-gradient(...)'
+    if (preset.css.startsWith('linear-gradient')){
+      el.style.backgroundImage = preset.css;
+    } else {
+      el.style.backgroundColor = preset.css;
+    }
   }
+
   updateBgUI();
+  updateRestoreBtnUI();
 }
+
+/** Sinkronisasi UI card aktif. */
 function updateBgUI(){
   document.querySelectorAll('.bg-card').forEach(c => {
     c.classList.toggle('active', c.dataset.bg === state.bgId);
   });
+  // Update custom color wrapper active state
+  if (els.bgCustomColorWrap){
+    els.bgCustomColorWrap.classList.toggle('active', state.bgId === 'custom_color');
+  }
+  if (els.bgCustomColorHex && state.bgCustomColor){
+    els.bgCustomColorHex.textContent = state.bgCustomColor.toUpperCase();
+  }
+  if (els.bgCustomColor && state.bgCustomColor){
+    els.bgCustomColor.value = state.bgCustomColor;
+  }
 }
+
+/**
+ * Ganti background ke preset (color/gradient).
+ * FOTO TERSIMPAN TIDAK DIHAPUS — hanya tidak ditampilkan.
+ */
 function selectBg(id){
   if (id === 'custom'){
-    if (state.bgCustomUrl){
+    // Klik kartu Upload: jika ada foto tersimpan, aktifkan langsung;
+    // jika belum, buka file picker.
+    if (state.bgCustomSrc){
       state.bgId = 'custom';
       applyBackground();
-      idbSet('bgId', 'custom').catch(()=>{});
+      persistBgSelection('custom');
     } else {
       els.bgImageInput.click();
     }
     return;
   }
+  // Preset: switch ke color/gradient, foto tetap di storage.
   state.bgId = id;
   applyBackground();
-  idbSet('bgId', id).catch(()=>{});
+  persistBgSelection(id);
 }
-els.bgImageInput.addEventListener('change', async e => {
-  const file = e.target.files?.[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  if (state.bgCustomUrl) URL.revokeObjectURL(state.bgCustomUrl);
-  state.bgCustomUrl = URL.createObjectURL(file);
+
+/* ─── Tombol "Gunakan Foto Tersimpan" ─── */
+els.bgRestoreBtn.addEventListener('click', e => {
+  // Jika klik area clear → hapus, jangan restore
+  if (e.target.closest('#bgRestoreClear')) return;
+  if (!state.bgCustomSrc) return;
   state.bgId = 'custom';
   applyBackground();
-  try {
-    await idbSet('bgImage', file);
-    await idbSet('bgId', 'custom');
-  } catch(_){}
-  toast('Background gambar diterapkan', 'success');
-  e.target.value = '';
+  persistBgSelection('custom');
+  toast('Foto tersimpan diaktifkan kembali', 'success');
 });
-async function loadSavedBackground(){
-  try {
-    const savedId = await idbGet('bgId');
-    if (savedId) state.bgId = savedId;
-    if (state.bgId === 'custom'){
-      const blob = await idbGet('bgImage');
-      if (blob instanceof Blob) state.bgCustomUrl = URL.createObjectURL(blob);
-      else state.bgId = 'black';
-    }
-  } catch(_){}
+
+els.bgRestoreClear.addEventListener('click', async e => {
+  e.stopPropagation();
+  if (!confirm('Hapus foto latar tersimpan?')) return;
+
+  releaseBgSrc(state.bgCustomSrc);
+  state.bgCustomSrc = null;
+  await clearStoredBgImage();
+
+  // Jika sedang aktif, fallback ke preset default
+  if (state.bgId === 'custom'){
+    state.bgId = 'black';
+    persistBgSelection('black');
+  }
   applyBackground();
+  toast('Foto tersimpan dihapus', 'info');
+});
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ CUSTOM BG COLOR HANDLER (NEW) ═══
+   ═══════════════════════════════════════════════════════════════════ */
+if (els.bgCustomColor){
+  els.bgCustomColor.addEventListener('input', e => {
+    const hex = e.target.value;
+    state.bgCustomColor = hex;
+    state.bgId = 'custom_color';
+    applyBackground();
+    persistBgSelection('custom_color');
+    try { localStorage.setItem(LS_KEYS.bgColor, hex); } catch(_){}
+  });
+
+  // Klik pada wrapper juga aktifkan mode custom_color
+  els.bgCustomColorWrap.addEventListener('click', e => {
+    if (e.target === els.bgCustomColor) return;
+    // Aktifkan tanpa perlu drag color picker
+    if (state.bgId !== 'custom_color'){
+      state.bgCustomColor = state.bgCustomColor || els.bgCustomColor.value;
+      state.bgId = 'custom_color';
+      applyBackground();
+      persistBgSelection('custom_color');
+      try { localStorage.setItem(LS_KEYS.bgColor, state.bgCustomColor); } catch(_){}
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ CROP → APPLY (SINGLE-PATH, ATOMIC) ═══
+   Alur:
+     1. Blob dari cropEditor
+     2. Convert → DataURL (satu-satunya src yang dipakai)
+     3. Revoke ObjectURL lama JIKA ada (best-effort)
+     4. Set state & apply
+     5. Persist (fire-and-forget, tidak blocking UI)
+   ═══════════════════════════════════════════════════════════════════ */
+els.bgImageInput.addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+
+  cropEditor.open(file, async (blob) => {
+    if (!blob){
+      toast('Gagal memproses gambar', 'error');
+      return;
+    }
+
+    try {
+      // ─── STEP 1: Convert to DataURL dulu (single source of truth) ───
+      const dataUrl = await blobToDataURL(blob);
+      if (!dataUrl || typeof dataUrl !== 'string'){
+        throw new Error('DataURL conversion returned invalid result');
+      }
+
+      // ─── STEP 2: Revoke OLD src JIKA masih ObjectURL (cleanup legacy) ───
+      const oldSrc = state.bgCustomSrc;
+      if (typeof oldSrc === 'string' && oldSrc.startsWith('blob:')){
+        try { URL.revokeObjectURL(oldSrc); } catch(_){}
+      }
+
+      // ─── STEP 3: Set state ATOMIC (semua siap sebelum apply) ───
+      state.bgCustomSrc = dataUrl;
+      state.bgId = 'custom';
+
+      // ─── STEP 4: Apply ke DOM ───
+      applyBackground();
+
+      // ─── STEP 5: Persist (non-blocking, error-safe) ───
+      idbSet('bgImage', blob).catch(err =>
+        console.warn('[Lumen] IDB save failed:', err));
+      idbSet('bgId', 'custom').catch(()=>{});
+      persistBgImageToLS(dataUrl);
+      persistBgSelection('custom');
+
+      console.log('[Lumen] Background applied:', {
+        src: dataUrl.slice(0, 40) + '...',
+        size: (blob.size / 1024).toFixed(1) + ' KB',
+      });
+
+      toast('Background gambar diterapkan', 'success');
+    } catch(err){
+      console.error('[Lumen] Crop apply failed:', err);
+      toast('Gagal menyimpan background: ' + (err.message || ''), 'error');
+    }
+  });
+});
+
+/* ─── Load saat init ─── */
+async function loadSavedBackground(){
+  const savedId    = readBgIdFromLS();
+  const savedImg   = readBgImageFromLS();
+  let   savedColor = null;
+  try { savedColor = localStorage.getItem(LS_KEYS.bgColor); } catch(_){}
+
+  // ─── Restore custom bg color ───
+  if (savedColor && /^#[0-9a-fA-F]{6}$/.test(savedColor)){
+    state.bgCustomColor = savedColor;
+    if (els.bgCustomColor) els.bgCustomColor.value = savedColor;
+    if (els.bgCustomColorHex) els.bgCustomColorHex.textContent = savedColor.toUpperCase();
+  }
+
+  // ─── Layer 1: localStorage (sync, source of truth) ───
+// Validasi: DataURL harus benar-benar valid (data:image/...)
+if (savedImg && typeof savedImg === 'string' && savedImg.startsWith('data:image/')){
+  state.bgCustomSrc = savedImg;
+} else {
+    // ─── Layer 2: IndexedDB (fallback + one-time migration) ───
+    try {
+      const blob = await idbGet('bgImage');
+      if (blob instanceof Blob && blob.size > 0){
+try {
+  const dataUrl = await blobToDataURL(blob);
+  if (dataUrl && dataUrl.startsWith('data:image/')){
+    state.bgCustomSrc = dataUrl;
+    persistBgImageToLS(dataUrl);
+  }
+} catch(err){
+  console.warn('[Lumen] IDB → DataURL conversion failed:', err);
+  // Tidak fallback ke ObjectURL — lebih baik tidak menampilkan apa-apa
+  // daripada menampilkan ObjectURL yang akan invalid setelah reload.
+}
+      }
+    } catch(_){}
+  }
+
+  // Tentukan bgId: LS → IDB → default
+  let resolvedId = savedId;
+  if (!resolvedId){
+    try {
+      const idbId = await idbGet('bgId');
+      if (idbId) resolvedId = idbId;
+    } catch(_){}
+  }
+
+// Validasi: fallback jika mode custom tapi tidak ada data terkait
+if (resolvedId === 'custom' && !state.bgCustomSrc) resolvedId = 'black';
+if (resolvedId === 'custom_color' && !state.bgCustomColor) resolvedId = 'black';
+if (!resolvedId){
+  if (state.bgCustomSrc) resolvedId = 'custom';
+  else if (state.bgCustomColor) resolvedId = 'custom_color';
+  else resolvedId = 'black';
+}
+
+  state.bgId = resolvedId;
+  applyBackground();
+  persistBgSelection(resolvedId); // normalize LS
 }
 
 els.rotRow.querySelectorAll('.rot-btn').forEach(btn => {
@@ -2916,9 +4842,14 @@ function updatePlayBtn(){
   els.playBtn.classList.toggle('playing', !isLive && state.playing);
   els.playBtn.setAttribute('aria-label',
     isLive ? 'Stop live' : (state.playing ? 'Pause' : 'Play'));
-  els.prevBtn.disabled = library.currentIndex <= 0;
-  els.nextBtn.disabled = library.currentIndex < 0 ||
-    library.currentIndex >= library.filtered.length - 1;
+
+  // ─── Wrap-aware enable/disable ───
+  const atStart = library.currentIndex <= 0;
+  const atEnd   = library.currentIndex < 0 ||
+                  library.currentIndex >= library.filtered.length - 1;
+  const wraps   = state.playMode === 'shuffle' || state.playMode === 'repeat-all';
+  els.prevBtn.disabled = atStart && !wraps;
+  els.nextBtn.disabled = atEnd && !wraps;
 }
 async function setSource(type){
   if (state.source === type) return;
@@ -2941,12 +4872,16 @@ async function setSource(type){
       els.curTime.textContent = '--:--';
       els.durTime.textContent = '--:--';
       els.progressFill.style.width = '0%';
-      toast('Mikrofon aktif', 'success');
-    } catch(e){
-      console.error(e); state.source = null;
-      toast(e.message || 'Izin mikrofon ditolak', 'error');
-    }
-    updateSourceUI(); updatePlayBtn(); return;
+  toast('Mikrofon aktif', 'success');
+} catch(e){
+  console.error(e); state.source = null;
+  toast(e.message || 'Izin mikrofon ditolak', 'error');
+}
+updateSourceUI(); updatePlayBtn();
+if (typeof np !== 'undefined' && np.isOpen){
+  np._syncLiveState(); np._syncPlayState();
+}
+return;
   }
   if (type === 'system'){
     try {
@@ -2981,6 +4916,12 @@ function stopLiveSource(){
     els.durTime.textContent = '0:00';
   }
   updateSourceUI(); updatePlayBtn();
+  // Sync NP (jika sedang terbuka)
+  if (typeof np !== 'undefined'){
+    np._syncLiveState();
+    np._syncPlayState();
+    np._syncControls();
+  }
 }
 els.sourceRow.querySelectorAll('.source-btn').forEach(btn => {
   btn.addEventListener('click', () => setSource(btn.dataset.source));
@@ -3479,7 +5420,7 @@ function escapeHtml(s){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   })[c]);
 }
-async function playTrackAt(i){
+async function playTrackAt(i, autoAdvance = false){
   const track = library.filtered[i];
   if (!track) return;
   library.currentIndex = i;
@@ -3509,17 +5450,64 @@ async function playTrackAt(i){
     await engine.play();
     renderLibList();
     updatePlayBtn();
+
+    // ─── Sync Now Playing ───
+    if (np.isOpen){
+      np._syncAll();
+    } else if (!autoAdvance){
+      // Buka NP hanya untuk pemilihan manual (bukan autoplay)
+      np.open();
+    }
   } catch(e){
     console.error(e);
     toast('Gagal membuka file: ' + (e.message || ''), 'error');
   }
 }
-function playPrevTrack(){
-  if (library.currentIndex > 0) playTrackAt(library.currentIndex - 1);
+function playPrevTrack(autoAdvance = false){
+  if (library.currentIndex < 0) return;
+
+  // ─── Shuffle: random prev ───
+  if (state.playMode === 'shuffle' && library.filtered.length > 1){
+    let prev;
+    do { prev = Math.floor(Math.random() * library.filtered.length); }
+    while (prev === library.currentIndex);
+    playTrackAt(prev, autoAdvance);
+    return;
+  }
+
+  // ─── Normal: mundur satu track ───
+  if (library.currentIndex > 0){
+    playTrackAt(library.currentIndex - 1, autoAdvance);
+    return;
+  }
+
+  // ─── Di track pertama: wrap jika repeat-all ───
+  if (state.playMode === 'repeat-all'){
+    playTrackAt(library.filtered.length - 1, autoAdvance);
+  }
 }
-function playNextTrack(){
-  if (library.currentIndex >= 0 && library.currentIndex < library.filtered.length - 1){
-    playTrackAt(library.currentIndex + 1);
+
+function playNextTrack(autoAdvance = false){
+  if (library.currentIndex < 0) return;
+
+  // ─── Shuffle: random next ───
+  if (state.playMode === 'shuffle' && library.filtered.length > 1){
+    let next;
+    do { next = Math.floor(Math.random() * library.filtered.length); }
+    while (next === library.currentIndex);
+    playTrackAt(next, autoAdvance);
+    return;
+  }
+
+  // ─── Normal: maju satu track ───
+  if (library.currentIndex < library.filtered.length - 1){
+    playTrackAt(library.currentIndex + 1, autoAdvance);
+    return;
+  }
+
+  // ─── Di track terakhir: wrap jika repeat-all ───
+  if (state.playMode === 'repeat-all'){
+    playTrackAt(0, autoAdvance);
   }
 }
 
@@ -3604,9 +5592,22 @@ engine.on('ended', () => {
   state.playing = false;
   els.progressFill.style.width = '0%';
   updatePlayBtn();
-  if (library.currentIndex >= 0 && library.currentIndex < library.filtered.length - 1){
-    playNextTrack();
+
+  if (library.currentIndex < 0) return;
+
+  // ─── REPEAT ONE: restart lagu yang sama ───
+  if (state.playMode === 'repeat-one'){
+    engine.audio.currentTime = 0;
+    engine.audio.addEventListener('seeked', function onSeeked(){
+      engine.audio.removeEventListener('seeked', onSeeked);
+      engine.play().catch(() => {});
+    }, { once: true });
+    return;
   }
+
+  // ─── Semua mode lain: delegate ke playNextTrack ───
+  // playNextTrack sudah menangani wrap-around + shuffle + last-track check
+  playNextTrack(true);
 });
 engine.on('loaded', dur => { els.durTime.textContent = fmtTime(dur); });
 engine.on('timeupdate', cur => {
@@ -3629,6 +5630,58 @@ els.progress.addEventListener('click', e => {
 });
 els.volSlider.addEventListener('input', e => {
   const v = parseFloat(e.target.value);
+  /* ═══════════════════════════════════════════════════════════════════
+   ═══ MINI PLAYER → FULL PLAYER ═══
+   Klik pada track-info (judul + subjudul) untuk expand ke Full Player.
+   Menggunakan event delegation agar tetap valid meskipun DOM berubah.
+   ═══════════════════════════════════════════════════════════════════ */
+(function bindMiniPlayerTap(){
+  const info = document.getElementById('trackInfo');
+  if (!info) return;
+
+  const tryOpen = () => {
+    if (np.isOpen) return;
+    // Buka NP — konten kosong tetap ditampilkan (placeholder "Belum ada lagu")
+    np.open();
+  };
+
+  // Click / tap
+  info.addEventListener('click', e => {
+    e.stopPropagation(); // jangan trigger handler global (hide UI)
+    tryOpen();
+  });
+
+  // Keyboard (Enter / Space) — karena role="button"
+  info.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' '){
+      e.preventDefault();
+      e.stopPropagation();
+      tryOpen();
+    }
+  });
+
+  // One-time subtle hint pulse saat track pertama kali diputar
+  const HINT_FLAG = 'lumen_hint_np_seen';
+  let hintShown = false;
+  try { hintShown = localStorage.getItem(HINT_FLAG) === '1'; } catch(_){}
+
+  engine.on('play', () => {
+    if (hintShown || np.isOpen) return;
+    document.body.classList.add('np-hint');
+    setTimeout(() => {
+      document.body.classList.remove('np-hint');
+      try { localStorage.setItem(HINT_FLAG, '1'); } catch(_){}
+    }, 5200);
+    hintShown = true;
+  });
+
+  // Sembunyikan hint saat NP dibuka secara manual
+  const origOpen = np.open.bind(np);
+  np.open = function(){
+    document.body.classList.remove('np-hint');
+    origOpen();
+  };
+})();
   engine.setVolume(v);
   els.volIcon.style.opacity = v === 0 ? 0.35 : 1;
 });
@@ -3637,6 +5690,33 @@ engine.setVolume(0.8);
 const VIZ_SHORTCUTS = ALL_MODES.map(m => m.id);
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+// ─── Escape prioritas tertinggi: tutup modal yang aktif ───
+if (e.key === 'Escape'){
+  if (about.isOpen()){ e.preventDefault(); about.close(); return; }
+  if (typeof np !== 'undefined' && np.isOpen){ e.preventDefault(); np.close(); return; }
+  if (state.uiHidden){ e.preventDefault(); showUI(); return; }
+}
+
+  // ─── Guard: skip shortcut utama saat modal aktif ───
+  if (cropEditor.isOpen()) return;
+  if (els.permOverlay.classList.contains('active')) return;
+  if (about.isOpen()) return;
+
+  // ─── Toggle UI (non-fullscreen) ───
+  if (e.key === 'h' || e.key === 'H'){
+    e.preventDefault();
+    toggleUI();
+    return;
+  }
+
+  // ─── Info / About ───
+  if (e.key === 'i' || e.key === 'I'){
+    e.preventDefault();
+    about.open();
+    return;
+  }
+
   if (e.code === 'Space'){
     e.preventDefault();
     const isLive = state.source === 'mic' || state.source === 'system';
@@ -3661,13 +5741,13 @@ window.addEventListener('keydown', e => {
     switchViz(VIZ_SHORTCUTS[next]);
     return;
   }
-  if (e.key === 't' || e.key === 'T'){
-    const ids = Object.keys(THEMES);
-    const curIdx = ids.indexOf(state.theme);
-    const next = ids[(curIdx + 1) % ids.length];
-    applyTheme(next);
-    return;
-  }
+if (e.key === 't' || e.key === 'T'){
+  const ids = ['custom', ...Object.keys(THEMES)];
+  const curIdx = ids.indexOf(state.beatTheme);
+  const next = ids[(curIdx + 1) % ids.length];
+  setBeatColor(next);
+  return;
+}
   if (e.key === 'b' || e.key === 'B'){
     const ids = BG_PRESETS.map(b => b.id);
     const curIdx = ids.indexOf(state.bgId);
@@ -3685,25 +5765,841 @@ window.addEventListener('keydown', e => {
     return;
   }
 });
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ CROP EDITOR ═══
+   Modal interaktif untuk memangksa gambar latar sebelum diterapkan.
+   Model: fixed-frame crop (frame = viewport). Gambar di-pan/zoom.
+   ═══════════════════════════════════════════════════════════════════ */
+class CropEditor {
+  constructor(){
+    this.overlay   = $('cropOverlay');
+    this.stage     = $('cropStage');
+    this.canvas    = $('cropCanvas');
+    this.ctx       = this.canvas.getContext('2d', { alpha: false });
+    this.zoomInput = $('cropZoom');
+    this.zoomVal   = $('cropZoomVal');
+    this.ratioRow  = $('cropRatioRow');
+    this.loading   = $('cropLoading');
+    this.btnClose  = $('cropClose');
+    this.btnCancel = $('cropCancel');
+    this.btnApply  = $('cropApply');
 
+    // State gambar & transform
+    this.img = null;
+    this.srcFile = null;
+    this.zoom = 1;              // 1..4 (relatif ke cover-fit baseScale)
+    this.offsetX = 0;           // px, top-left gambar dalam stage-space
+    this.offsetY = 0;
+    this.baseScale = 1;         // skala minimum agar gambar menutupi stage
+    this.stageW = 0;
+    this.stageH = 0;
+    this.dpr = 1;
+    this.ratioName = 'screen';
+    this.ratioValue = null;     // null = pakai aspect viewport
+    this.onSave = null;
+
+    // Pointer state
+    this.pointers = new Map();  // pointerId -> {x,y}
+    this.dragging = false;
+    this.lastPinchDist = 0;
+    this._rafPending = false;
+    this._resizeTimer = null;
+
+    this._bind();
+  }
+
+  /* ─── Public API ─── */
+  open(file, onSave){
+    if (!file) return;
+    this.srcFile = file;
+    this.onSave  = onSave;
+
+    // Reset state
+    this.zoom = 1;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.ratioName = 'screen';
+    this.ratioValue = null;
+    this.pointers.clear();
+    this.dragging = false;
+    this.lastPinchDist = 0;
+
+    // Reset UI
+    this.zoomInput.value = '1';
+    this.zoomVal.textContent = '1.00×';
+    this.ratioRow.querySelectorAll('.crop-ratio-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.ratio === 'screen');
+    });
+
+    // Show overlay + loading
+    this.loading.classList.add('show');
+    this.overlay.classList.add('active');
+
+    // Load image
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img._cropUrl = url;
+    img.onload = () => {
+      if (this.img?._cropUrl) URL.revokeObjectURL(this.img._cropUrl);
+      this.img = img;
+      this.loading.classList.remove('show');
+      // Tunggu satu frame agar CSS transition selesai → ukuran stabil
+      requestAnimationFrame(() => this._layout());
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      this.loading.classList.remove('show');
+      this._teardown();
+      toast('Gagal memuat gambar', 'error');
+    };
+    img.src = url;
+  }
+
+  isOpen(){ return this.overlay.classList.contains('active'); }
+
+  close(){
+    this.overlay.classList.remove('active');
+    this._teardown();
+  }
+
+  /* ─── Internal ─── */
+  _teardown(){
+    if (this.img?._cropUrl){
+      URL.revokeObjectURL(this.img._cropUrl);
+      this.img._cropUrl = null;
+    }
+    this.img = null;
+    this.srcFile = null;
+    this.pointers.clear();
+    this.dragging = false;
+    this.lastPinchDist = 0;
+    this.stage.classList.remove('dragging');
+  }
+
+  _bind(){
+    // Buttons
+    this.btnClose.addEventListener('click', () => this.close());
+    this.btnCancel.addEventListener('click', () => this.close());
+    this.btnApply.addEventListener('click', () => this._apply());
+    this.overlay.addEventListener('click', e => {
+      if (e.target === this.overlay) this.close();
+    });
+
+    // Esc to close
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && this.isOpen()) this.close();
+    });
+
+    // Zoom slider
+    this.zoomInput.addEventListener('input', e => {
+      this._setZoom(parseFloat(e.target.value), false);
+    });
+
+    // Aspect ratio
+    this.ratioRow.addEventListener('click', e => {
+      const btn = e.target.closest('.crop-ratio-btn');
+      if (!btn) return;
+      this._setRatio(btn.dataset.ratio);
+    });
+
+    // Pointer drag & pinch
+    this.stage.addEventListener('pointerdown', e => this._onPointerDown(e));
+    this.stage.addEventListener('pointermove', e => this._onPointerMove(e));
+    this.stage.addEventListener('pointerup', e => this._onPointerUp(e));
+    this.stage.addEventListener('pointercancel', e => this._onPointerUp(e));
+
+    // Wheel zoom
+    this.stage.addEventListener('wheel', e => {
+      if (!this.img) return;
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      this._setZoom(this.zoom * factor, true);
+    }, { passive: false });
+
+    // Re-layout saat resize (debounced)
+    window.addEventListener('resize', () => {
+      if (!this.isOpen() || !this.img) return;
+      clearTimeout(this._resizeTimer);
+      this._resizeTimer = setTimeout(() => this._layout(), 120);
+    }, { passive: true });
+  }
+
+  /* ─── Layout ─── */
+  _layout(){
+    if (!this.img) return;
+
+    const aspect = this.ratioValue != null
+      ? this.ratioValue
+      : (window.innerWidth / window.innerHeight);
+
+    // Available space: kontainer wrap minus padding horizontal (16px × 2)
+    const wrap = this.stage.parentElement;
+    const wrapW = Math.max(200, wrap.clientWidth - 32);
+    const maxH = Math.max(160, Math.min(window.innerHeight * 0.46, 420));
+
+    let w, h;
+    if (wrapW / aspect <= maxH){
+      w = wrapW;
+      h = wrapW / aspect;
+    } else {
+      h = maxH;
+      w = maxH * aspect;
+    }
+
+    this.stageW = Math.round(w);
+    this.stageH = Math.round(h);
+    this.stage.style.width = this.stageW + 'px';
+    this.stage.style.height = this.stageH + 'px';
+
+    // Canvas dengan DPR capped 2
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = dpr;
+    this.canvas.width  = Math.round(this.stageW * dpr);
+    this.canvas.height = Math.round(this.stageH * dpr);
+    this.canvas.style.width  = this.stageW + 'px';
+    this.canvas.style.height = this.stageH + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = 'high';
+
+    // Recompute cover-fit base scale
+    this.baseScale = Math.max(
+      this.stageW / this.img.width,
+      this.stageH / this.img.height
+    );
+
+    // Center & clamp
+    this._centerImage();
+    this._clampOffsets();
+    this._draw();
+  }
+
+  _centerImage(){
+    if (!this.img) return;
+    const s = this.baseScale * this.zoom;
+    const dW = this.img.width  * s;
+    const dH = this.img.height * s;
+    this.offsetX = (this.stageW - dW) / 2;
+    this.offsetY = (this.stageH - dH) / 2;
+  }
+
+  _clampOffsets(){
+    if (!this.img) return;
+    const s = this.baseScale * this.zoom;
+    const dW = this.img.width  * s;
+    const dH = this.img.height * s;
+
+    // Cover-fit memastikan dW >= stageW & dH >= stageH
+    const minX = this.stageW - dW; // ≤ 0
+    const minY = this.stageH - dH; // ≤ 0
+
+    this.offsetX = Math.min(0, Math.max(minX, this.offsetX));
+    this.offsetY = Math.min(0, Math.max(minY, this.offsetY));
+  }
+
+  /* ─── Zoom ─── */
+  _setZoom(z, syncInput = true){
+    if (!this.img) return;
+    z = Math.max(1, Math.min(4, z));
+    if (Math.abs(z - this.zoom) < 0.001) return;
+
+    // Preserve titik di tengah stage agar zoom terasa natural
+    const s1 = this.baseScale * this.zoom;
+    const imgCx = (this.stageW / 2 - this.offsetX) / s1;
+    const imgCy = (this.stageH / 2 - this.offsetY) / s1;
+
+    this.zoom = z;
+    const s2 = this.baseScale * this.zoom;
+    this.offsetX = this.stageW / 2 - imgCx * s2;
+    this.offsetY = this.stageH / 2 - imgCy * s2;
+
+    this._clampOffsets();
+    this._schedule();
+
+    if (syncInput) this.zoomInput.value = String(z);
+    this.zoomVal.textContent = z.toFixed(2) + '×';
+  }
+
+  /* ─── Aspect ratio ─── */
+  _setRatio(name){
+    if (name === this.ratioName && this.img) return;
+    this.ratioRow.querySelectorAll('.crop-ratio-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.ratio === name);
+    });
+    this.ratioName = name;
+    if (name === 'screen'){
+      this.ratioValue = null;
+    } else {
+      const [a, b] = name.split(':').map(Number);
+      this.ratioValue = a / b;
+    }
+    // Re-layout. Gambar akan di-center ulang untuk rasio baru.
+    this._layout();
+  }
+
+  /* ─── Render loop ─── */
+  _schedule(){
+    if (this._rafPending) return;
+    this._rafPending = true;
+    requestAnimationFrame(() => {
+      this._rafPending = false;
+      this._draw();
+    });
+  }
+
+  _draw(){
+    if (!this.img) return;
+    const ctx = this.ctx;
+    const s = this.baseScale * this.zoom;
+    const dW = this.img.width  * s;
+    const dH = this.img.height * s;
+
+    // Clear + background hitam (bukan transparent)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, this.stageW, this.stageH);
+
+    // Draw image (offset sudah di-clamp)
+    ctx.drawImage(this.img, this.offsetX, this.offsetY, dW, dH);
+  }
+
+  /* ─── Pointer: drag & pinch ─── */
+  _onPointerDown(e){
+    if (!this.img) return;
+    e.preventDefault();
+
+    try { this.stage.setPointerCapture(e.pointerId); } catch(_){}
+    if (this.pointers.size >= 2) return; // abaikan finger ke-3+
+
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (this.pointers.size === 1){
+      this.dragging = true;
+      this.stage.classList.add('dragging');
+    } else if (this.pointers.size === 2){
+      this.dragging = false;
+      this.stage.classList.remove('dragging');
+      const [p1, p2] = [...this.pointers.values()];
+      this.lastPinchDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    }
+  }
+
+  _onPointerMove(e){
+    if (!this.pointers.has(e.pointerId)) return;
+    e.preventDefault();
+
+    const prev = this.pointers.get(e.pointerId);
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (this.pointers.size === 1 && this.dragging){
+      this.offsetX += e.clientX - prev.x;
+      this.offsetY += e.clientY - prev.y;
+      this._clampOffsets();
+      this._schedule();
+    } else if (this.pointers.size === 2){
+      const [p1, p2] = [...this.pointers.values()];
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (this.lastPinchDist > 0 && dist > 0){
+        this._setZoom(this.zoom * (dist / this.lastPinchDist), true);
+      }
+      this.lastPinchDist = dist;
+    }
+  }
+
+  _onPointerUp(e){
+    if (!this.pointers.has(e.pointerId)) return;
+    this.pointers.delete(e.pointerId);
+    try { this.stage.releasePointerCapture(e.pointerId); } catch(_){}
+
+    if (this.pointers.size === 0){
+      this.dragging = false;
+      this.stage.classList.remove('dragging');
+      this.lastPinchDist = 0;
+    } else if (this.pointers.size === 1){
+      // Transisi dari pinch ke drag
+      this.dragging = true;
+      this.stage.classList.add('dragging');
+      this.lastPinchDist = 0;
+    }
+  }
+
+  /* ─── Apply & save ─── */
+  _apply(){
+    if (!this.img) return;
+    const img = this.img;
+    const s = this.baseScale * this.zoom;
+
+    // Rect sumber di ruang koordinat gambar asli
+    const sx = -this.offsetX / s;
+    const sy = -this.offsetY / s;
+    const sw = this.stageW / s;
+    const sh = this.stageH / s;
+
+    // Cap dimensi output untuk jaga ukuran file & performa
+    const MAX_DIM = 2560;
+    let outW = sw, outH = sh;
+    if (outW > MAX_DIM || outH > MAX_DIM){
+      const k = MAX_DIM / Math.max(outW, outH);
+      outW *= k; outH *= k;
+    }
+    outW = Math.max(1, Math.round(outW));
+    outH = Math.max(1, Math.round(outH));
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = outW;
+    outCanvas.height = outH;
+    const octx = outCanvas.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    try {
+      octx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    } catch(err){
+      console.error(err);
+      toast('Gagal memangkas gambar', 'error');
+      return;
+    }
+
+    // PNG tetap PNG (preserve ketajaman); selain itu JPEG 0.92
+    const srcType = (this.srcFile?.type || '').toLowerCase();
+    const outType = srcType === 'image/png' ? 'image/png' : 'image/jpeg';
+    const quality = outType === 'image/jpeg' ? 0.92 : undefined;
+
+    outCanvas.toBlob(blob => {
+      if (!blob){
+        toast('Gagal memproses gambar', 'error');
+        return;
+      }
+      const cb = this.onSave;
+      this.close();
+      if (typeof cb === 'function') cb(blob);
+    }, outType, quality);
+  }
+}
+
+/* Instance singleton — reuse sepanjang siklus hidup halaman */
+const cropEditor = new CropEditor();
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ ABOUT / LANDING ═══
+   Modal informasi; muncul pada first-visit; bisa dibuka via tombol info.
+   ═══════════════════════════════════════════════════════════════════ */
+const ABOUT_FLAG = 'lumen_seen_about_session';
+
+const about = {
+  _closedAt: 0,
+
+  open(){
+    if (this.isOpen()) return;
+    els.aboutOverlay.classList.add('active');
+  },
+
+  close(){
+    if (!this.isOpen()) return;
+    els.aboutOverlay.classList.remove('active');
+    this._closedAt = Date.now();
+    // Tandai sudah dilihat di sesi ini → tidak muncul lagi sampai tab baru
+    try { sessionStorage.setItem(ABOUT_FLAG, '1'); } catch(_){}
+  },
+
+  isOpen(){
+    return els.aboutOverlay.classList.contains('active');
+  },
+
+  /**
+   * True jika About baru saja ditutup (<300ms lalu).
+   * Guard kedua di global click handler untuk mencegah click-through.
+   */
+  justClosed(){
+    return Date.now() - this._closedAt < 300;
+  },
+
+  hasSeen(){
+    // Hanya baca dari sessionStorage — About muncul lagi di tab baru
+    try { return sessionStorage.getItem(ABOUT_FLAG) === '1'; } catch(_){ return false; }
+  },
+};
+
+// Bind events
+els.aboutClose.addEventListener('click', () => about.close());
+els.aboutStart.addEventListener('click', () => about.close());
+
+/**
+ * Overlay About: stopPropagation di sini mencegah "click-through" ke
+ * global click handler setelah modal tertutup. Tanpa ini, klik pada
+ * tombol mana pun di dalam About akan bubble ke document dan memicu
+ * hideUI() — menyebabkan tampilan jadi kosong setelah user keluar
+ * dari About untuk pertama kalinya.
+ */
+els.aboutOverlay.addEventListener('click', e => {
+  e.stopPropagation();
+  if (e.target === els.aboutOverlay) about.close();
+});
+
+els.brandBtn.addEventListener('click', () => about.open());
+
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ UI TOGGLE (NON-FULLSCREEN) ═══
+   Hide/show seluruh panel tanpa masuk mode fullscreen.
+   ═══════════════════════════════════════════════════════════════════ */
+function toggleUI(){
+  if (state.uiHidden) showUI();
+  else hideUI();
+}
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ NOW PLAYING VIEW ═══
+   Fullscreen overlay yang "mendengarkan" audio engine.
+   Zero coupling: tidak mengubah playback pipeline existing.
+   ═══════════════════════════════════════════════════════════════════ */
+const np = {
+  isOpen: false,
+  _dragging: false,
+
+open(){
+  if (this.isOpen) return;
+  this.isOpen = true;
+  this._syncAll();
+  // Hide Mini Player + CTA dulu (CSS body.np-open)
+  document.body.classList.add('np-open');
+  // Force reflow 1× agar transisi transform fire dari state awal
+  void els.npOverlay.offsetHeight;
+  els.npOverlay.classList.add('active');
+},
+
+close(){
+  if (!this.isOpen) return;
+  this.isOpen = false;
+  els.npOverlay.classList.remove('active');
+  // Delay remove class agar Mini Player fade-in bersamaan (280ms < 450ms durasi NP)
+  setTimeout(() => {
+    if (!this.isOpen){
+      document.body.classList.remove('np-open');
+    }
+  }, 280);
+},
+
+  toggle(){ this.isOpen ? this.close() : this.open(); },
+
+  /* ─── Sync helpers ─── */
+_syncAll(){
+  this._syncTrack();
+  this._syncPlayState();
+  this._syncProgress();
+  this._syncMode();
+  this._syncLiveState();
+  this._syncControls();
+},
+
+  _syncTrack(){
+    const track = library.filtered[library.currentIndex];
+    if (track){
+      const title = track.name.replace(/\.[^.]+$/, '');
+      els.npTitle.textContent = title;
+      const meta = [
+        track.ext ? track.ext.toUpperCase() : '',
+        track.size ? fmtSize(track.size) : '',
+      ].filter(Boolean).join(' · ');
+      els.npSubtitle.textContent = meta || 'Audio lokal';
+    } else {
+      els.npTitle.textContent = 'Belum ada lagu';
+      els.npSubtitle.textContent = 'Pilih dari pustaka';
+    }
+  },
+
+  _syncPlayState(){
+    const playing = !!state.playing;
+    els.npOverlay.classList.toggle('playing', playing);
+    els.npPlay.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  },
+
+  _syncProgress(){
+    const a = engine.audio;
+    const cur = a.currentTime || 0;
+    const dur = a.duration || 0;
+    const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+    if (!this._dragging){
+      els.npProgressFill.style.width = pct + '%';
+      els.npProgressThumb.style.left = pct + '%';
+      els.npProgress.setAttribute('aria-valuenow', Math.round(pct));
+    }
+    els.npCurTime.textContent = fmtTime(cur);
+    els.npDurTime.textContent = fmtTime(dur);
+  },
+
+_syncMode(){
+  const mode = state.playMode;
+  els.npMode.dataset.mode = mode;
+
+  const labelMap = {
+    'off':         'Mode: normal',
+    'repeat-all':  'Mode: ulangi semua',
+    'repeat-one':  'Mode: ulangi satu lagu',
+    'shuffle':     'Mode: acak',
+  };
+  const label = labelMap[mode] || labelMap['off'];
+  els.npMode.setAttribute('aria-label', label);
+  els.npMode.title = label;
+},
+
+  _syncLiveState(){
+    const isLive = state.source === 'mic' || state.source === 'system';
+    els.npOverlay.classList.toggle('live-source', isLive);
+  },
+
+_syncControls(){
+  const atStart = library.currentIndex <= 0;
+  const atEnd   = library.currentIndex >= library.filtered.length - 1;
+  const wraps   = state.playMode === 'shuffle' || state.playMode === 'repeat-all';
+  els.npPrev.disabled = atStart && !wraps;
+  els.npNext.disabled = atEnd && !wraps;
+},
+};
+
+/* ─── Event Bindings ─── */
+els.npBack.addEventListener('click', () => np.close());
+
+els.npPlay.addEventListener('click', () => {
+  const isLive = state.source === 'mic' || state.source === 'system';
+  if (isLive){ stopLiveSource(); return; }
+  if (!state.hasAudio){ els.fileInput.click(); return; }
+  engine.toggle();
+});
+
+els.npPrev.addEventListener('click', () => {
+  // Jika > 3 detik sudah lewat, restart lagu; kalau tidak, prev track
+  if (engine.audio.currentTime > 3){
+    engine.audio.currentTime = 0;
+    return;
+  }
+  playPrevTrack();
+});
+
+els.npNext.addEventListener('click', () => playNextTrack());
+
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ MODE CYCLE: off → repeat-all → repeat-one → shuffle → off ═══
+   ═══════════════════════════════════════════════════════════════════ */
+const MODE_CYCLE = ['off', 'repeat-all', 'repeat-one', 'shuffle'];
+const MODE_LABEL = {
+  'off':         'Mode normal',
+  'repeat-all':  'Ulangi semua',
+  'repeat-one':  'Ulangi satu lagu',
+  'shuffle':     'Mode acak',
+};
+
+els.npMode.addEventListener('click', () => {
+  const idx = MODE_CYCLE.indexOf(state.playMode);
+  const next = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
+  state.playMode = next;
+
+  // ─── Sync visual & state ───
+  np._syncMode();
+  np._syncControls();
+
+  // ─── Pulse feedback ───
+  els.npMode.classList.remove('pulse');
+  void els.npMode.offsetWidth;   // force reflow → restart animation
+  els.npMode.classList.add('pulse');
+  setTimeout(() => els.npMode.classList.remove('pulse'), 460);
+
+  // ─── Notifikasi ───
+  toast(MODE_LABEL[next], 'info');
+});
+els.npQueue.addEventListener('click', () => {
+  np.close();
+  document.querySelector('.tab[data-tab="library"]')?.click();
+});
+
+/* ─── Progress Seek (drag + tap) ─── */
+(function bindNpProgress(){
+  const el = els.npProgress;
+
+  const pctFromEvent = (e) => {
+    const rect = el.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    return Math.max(0, Math.min(1, x / rect.width));
+  };
+
+  const seekTo = (pct) => {
+    if (state.source !== 'file' || !state.hasAudio) return;
+    const dur = engine.audio.duration;
+    if (isFinite(dur) && dur > 0){
+      engine.audio.currentTime = pct * dur;
+      els.npProgressFill.style.width = (pct * 100) + '%';
+      els.npProgressThumb.style.left = (pct * 100) + '%';
+    }
+  };
+
+  el.addEventListener('pointerdown', e => {
+    if (state.source !== 'file' || !state.hasAudio) return;
+    e.preventDefault();
+    np._dragging = true;
+    el.classList.add('dragging');
+    el.setPointerCapture(e.pointerId);
+    const pct = pctFromEvent(e);
+    els.npProgressFill.style.width = (pct * 100) + '%';
+    els.npProgressThumb.style.left = (pct * 100) + '%';
+  });
+
+  el.addEventListener('pointermove', e => {
+    if (!np._dragging) return;
+    const pct = pctFromEvent(e);
+    els.npProgressFill.style.width = (pct * 100) + '%';
+    els.npProgressThumb.style.left = (pct * 100) + '%';
+  });
+
+  el.addEventListener('pointerup', e => {
+    if (!np._dragging) return;
+    np._dragging = false;
+    el.classList.remove('dragging');
+    try { el.releasePointerCapture(e.pointerId); } catch(_){}
+    seekTo(pctFromEvent(e));
+  });
+
+  el.addEventListener('pointercancel', () => {
+    np._dragging = false;
+    el.classList.remove('dragging');
+  });
+
+  // Keyboard accessibility
+  el.addEventListener('keydown', e => {
+    if (state.source !== 'file' || !state.hasAudio) return;
+    const dur = engine.audio.duration || 0;
+    if (!isFinite(dur) || dur <= 0) return;
+    let delta = 0;
+    if (e.key === 'ArrowLeft') delta = -5;
+    else if (e.key === 'ArrowRight') delta = 5;
+    else if (e.key === 'Home'){ engine.audio.currentTime = 0; e.preventDefault(); return; }
+    else if (e.key === 'End'){ engine.audio.currentTime = dur - 0.1; e.preventDefault(); return; }
+    else return;
+    e.preventDefault();
+    engine.audio.currentTime = Math.max(0, Math.min(dur, engine.audio.currentTime + delta));
+  });
+})();
+
+/* ─── Engine Event Observers (additive, tidak mengganti handler lama) ─── */
+engine.on('play', () => np._syncPlayState());
+engine.on('pause', () => np._syncPlayState());
+engine.on('loaded', () => np._syncProgress());
+engine.on('timeupdate', () => {
+  if (np.isOpen) np._syncProgress();
+});
+engine.on('ended', () => {
+  // Nothing extra — existing handler tetap menangani autoplay
+});
+/* ═══════════════════════════════════════════════════════════════════
+   ═══ MINI PLAYER → FULL PLAYER ═══
+   Binding di sini agar `np` sudah terdefinisi dan listener aktif
+   sejak halaman dimuat (bukan hanya setelah volSlider disentuh).
+   ═══════════════════════════════════════════════════════════════════ */
+(function bindMiniPlayerTap(){
+  const info = document.getElementById('trackInfo');
+  if (!info){
+    console.warn('[Lumen] #trackInfo tidak ditemukan');
+    return;
+  }
+
+  const tryOpen = () => {
+    if (np.isOpen) return;
+    np.open();
+  };
+
+  // ─── Click / tap: buka Full Player ───
+  info.addEventListener('click', e => {
+    e.stopPropagation();   // cegah handler global "klik-luar-hide-UI"
+    tryOpen();
+  });
+
+  // ─── Keyboard: Enter / Space (karena role="button") ───
+  info.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+      e.preventDefault();
+      e.stopPropagation();
+      tryOpen();
+    }
+  });
+
+  // ─── One-time hint pulse untuk user baru ───
+  const HINT_FLAG = 'lumen_hint_np_seen';
+  let hintShown = false;
+  try { hintShown = localStorage.getItem(HINT_FLAG) === '1'; } catch(_){}
+
+  if (!hintShown){
+    engine.on('play', () => {
+      if (hintShown || np.isOpen) return;
+      document.body.classList.add('np-hint');
+      setTimeout(() => {
+        document.body.classList.remove('np-hint');
+        try { localStorage.setItem(HINT_FLAG, '1'); } catch(_){}
+      }, 5200);
+      hintShown = true;
+    });
+  }
+
+  // ─── Sembunyikan hint segera saat NP dibuka ───
+  const origOpen = np.open.bind(np);
+  np.open = function(){
+    document.body.classList.remove('np-hint');
+    origOpen();
+  };
+})();
 /* ═══ INIT ═══ */
+// ─── LOCK UI THEME TO GREEN (called once, immutable) ───
+applyUITheme();
+
 state.viz = 'bars';
 applyVizUI('bars');
 els.rotRow.querySelector('[data-rot="0"]').classList.add('active');
 updateSourceUI();
 updatePlayBtn();
+np._syncMode();   // ← initialize mode button visual
 refreshLibrary();
 loadSavedBackground();
-loadSavedTheme();
+loadSavedBeatColor();
 loadSavedFolderSources();
 setTimeout(() => {
   updateSliderState(els.sliderSpectrum);
   updateSliderState(els.sliderOther);
+  updateSliderState(els.sliderBeat);
 }, 250);
+
+// ─── About: tampilkan pada awal setiap sesi (per-tab) ───
+// One-time cleanup: hapus flag lama dari localStorage agar user lama
+// tidak "terkunci" dari About pada sesi pertama setelah update ini.
+try { localStorage.removeItem('lumen_seen_about'); } catch(_){}
+
+if (!about.hasSeen()){
+  // Delay sedikit agar animasi opening halaman selesai dulu
+  setTimeout(() => about.open(), 420);
+}
 window.addEventListener('load', () => {
   updateSliderState(els.sliderSpectrum);
   updateSliderState(els.sliderOther);
+  updateSliderState(els.sliderBeat);
 }, { once: true });
+/* ═══ Discoverability hint: klik-di-luar untuk hide UI ═══ */
+(function showClickHintOnce(){
+  const HINT_FLAG = 'lumen_hint_click_hide_seen';
+  try {
+    if (localStorage.getItem(HINT_FLAG) === '1') return;
+    if (about.hasSeen() === false) return; // jangan overlap dengan About
+  } catch(_){ return; }
+
+  // Tunggu sampai About sudah ditutup (jika muncul)
+  const tryShow = () => {
+    if (about.isOpen()){
+      setTimeout(tryShow, 800);
+      return;
+    }
+    const hint = els.hint;
+    if (!hint) return;
+    hint.innerHTML = 'Klik di luar panel untuk menyembunyikan menu · <b>H</b> untuk toggle';
+    hint.classList.add('show');
+    setTimeout(() => {
+      hint.classList.remove('show');
+      try { localStorage.setItem(HINT_FLAG, '1'); } catch(_){}
+    }, 4200);
+  };
+
+  setTimeout(tryShow, 1200);
+})();
 </script>
 </body>
 </html>
